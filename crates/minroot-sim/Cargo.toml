@@ -1,0 +1,20 @@
+[package]
+name = "minroot-sim"
+version = "0.1.0"
+description = "Simulation and verification harness for MinRoot VDF hardware"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+comp-cat-rs.workspace = true
+minroot-core.workspace = true
+minroot-cat.workspace = true
+minroot-hdl.workspace = true
+rhdl.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+
+[lints]
+workspace = true

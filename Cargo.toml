@@ -1,0 +1,28 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/minroot-core",
+    "crates/minroot-cat",
+    "crates/minroot-hdl",
+    "crates/minroot-sim",
+]
+
+[workspace.package]
+edition = "2024"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/MavenRain/minroot-vdf-rs"
+
+[workspace.dependencies]
+comp-cat-rs = "0.5"
+minroot-core = { path = "crates/minroot-core" }
+minroot-cat = { path = "crates/minroot-cat" }
+minroot-hdl = { path = "crates/minroot-hdl" }
+minroot-sim = { path = "crates/minroot-sim" }
+rhdl = { git = "https://github.com/samitbasu/rhdl.git" }
+proptest = "1"
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = "warn"
+needless_pass_by_value = "warn"
+manual_map = "warn"

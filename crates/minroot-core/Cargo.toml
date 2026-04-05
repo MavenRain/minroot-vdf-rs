@@ -1,0 +1,15 @@
+[package]
+name = "minroot-core"
+version = "0.1.0"
+description = "Pure Rust reference implementation of MinRoot VDF field arithmetic"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+
+[dev-dependencies]
+proptest.workspace = true
+
+[lints]
+workspace = true

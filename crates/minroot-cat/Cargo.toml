@@ -1,0 +1,17 @@
+[package]
+name = "minroot-cat"
+version = "0.1.0"
+description = "Categorical pipeline abstractions for MinRoot VDF hardware"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+comp-cat-rs.workspace = true
+minroot-core.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+
+[lints]
+workspace = true
