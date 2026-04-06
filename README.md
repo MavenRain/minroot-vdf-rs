@@ -43,6 +43,131 @@ The MinRoot fifth-root pipeline decomposes into:
 
 The free category's universal property bridges the abstract pipeline spec and its concrete hdl-cat implementation: any `GraphMorphism` from `PipelineGraph` extends uniquely to a functor into the category of hdl-cat circuits.
 
+## Simulation
+
+Three levels of simulation, from fastest to most detailed:
+
+### Reference Model
+
+Run the pure-Rust `MinRoot` VDF against test vectors.  No hardware involved, used as the ground truth.
+
+```rust,ignore
+use minroot_core::field::{Curve, FieldElement};
+use minroot_sim::harness::run_reference_only;
+use minroot_sim::vectors::small_seeds;
+
+let vectors = small_seeds(Curve::Pallas, 5, 2);
+let summary = run_reference_only(vectors).run().unwrap_or_default();
+assert!(summary.all_passed());
+```
+
+### Behavioral Engine
+
+Drive the `FifthRootEngine` cycle-by-cycle through square-and-multiply steps, then verify against field arithmetic.  This exercises the full polynomial arithmetic pipeline (PolySqr, PolyMul, PolyReduce) without lowering to hdl-cat gates.
+
+```rust,ignore
+use minroot_core::field::{Curve, FieldElement};
+use minroot_sim::harness::run_engine_cubed;
+
+let result = run_engine_cubed(FieldElement::from_u64(42, Curve::Pallas))?;
+assert!(result.matched());
+```
+
+Or directly via the `Synchronous` trait for full control:
+
+```rust,ignore
+use minroot_core::field::{Curve, FieldElement};
+use minroot_core::polynomial::PolyElement;
+use minroot_hdl::circuit::Synchronous;
+use minroot_hdl::engine::{PallasEngine, EngineInput};
+use minroot_hdl::types::{MulControl, PolySignal};
+
+let x = FieldElement::from_u64(7, Curve::Pallas);
+let signal = PolySignal::from_poly_element(&PolyElement::from_field(x));
+
+// Compute x^3: exponent 3 = binary 11 (2 bits)
+let inputs: Vec<EngineInput> = vec![
+    EngineInput::load(signal, 2),
+    EngineInput::round(MulControl::Multiply), // MSB = 1
+    EngineInput::round(MulControl::Multiply), // LSB = 1
+];
+
+let (outputs, final_state) = PallasEngine::simulate(inputs);
+assert!(outputs.last().map_or(false, |o| o.done));
+
+let result = final_state.accum().to_poly_element(Curve::Pallas)?.to_field()?;
+assert_eq!(result, x * x * x);
+```
+
+### hdl-cat Testbench
+
+Cycle-accurate simulation of hdl-cat `CircuitArrow` and `Sync` machines with optional VCD waveform output for GTKWave.
+
+```rust,ignore
+use hdl_cat::bits::Bits;
+use hdl_cat::kind::{BitSeq, Hw};
+use minroot_hdl::synthesis::coeff_adder;
+use minroot_sim::testbench::{simulate_combinational, trace_combinational_vcd};
+
+let arrow = coeff_adder()?;
+let a = Bits::<17>::new_wrapping(10u128);
+let b = Bits::<17>::new_wrapping(20u128);
+let input = a.to_bits_seq().concat(b.to_bits_seq());
+
+// Simulate
+let samples = simulate_combinational(arrow.clone(), vec![input.clone()]).run()?;
+assert_eq!(samples.len(), 1);
+
+// Generate VCD waveform
+let vcd = trace_combinational_vcd(arrow, vec![input])?;
+std::fs::write("trace.vcd", &vcd)?;  // Open in GTKWave
+```
+
+## Verilog Emission
+
+hdl-cat generates synthesizable Verilog from Rust circuit descriptions.
+
+### Combinational Circuits
+
+```rust,ignore
+use minroot_hdl::synthesis::{coeff_adder, full_adder, emit_verilog};
+
+// Single gate
+let adder = coeff_adder()?;
+let adder_v = emit_verilog(&adder, "coeff_add").run()?;
+
+// Composed circuit (single-bit full adder from XOR/AND/OR)
+let fa = full_adder()?;
+let fa_v = emit_verilog(&fa, "full_adder").run()?;
+```
+
+### Synchronous Machines
+
+```rust,ignore
+use minroot_hdl::synthesis::emit_sync_verilog;
+
+let counter = hdl_cat::std_lib::counter::<8>()?;
+let verilog = emit_sync_verilog(&counter, "counter8").run()?;
+```
+
+### Writing Verilog to Files
+
+```rust,ignore
+use minroot_hdl::synthesis::{coeff_adder, full_adder, emit_verilog_to_file, emit_sync_verilog_to_file};
+
+// Combinational
+let adder = coeff_adder()?;
+emit_verilog_to_file(&adder, "coeff_add", "build/coeff_add.v").run()?;
+
+// Composed
+let fa = full_adder()?;
+emit_verilog_to_file(&fa, "full_adder", "build/full_adder.v").run()?;
+
+// Synchronous
+let counter = hdl_cat::std_lib::counter::<8>()?;
+emit_sync_verilog_to_file(&counter, "counter8", "build/counter8.v").run()?;
+```
+
 ## Build and Test
 
 ```sh

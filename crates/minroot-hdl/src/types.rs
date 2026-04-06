@@ -7,6 +7,7 @@
 use hdl_cat::bits::Bits;
 
 use crate::bits_ext;
+use minroot_cat::schedule::RoundControl;
 use minroot_core::polynomial::{COEFF_BITS, NUM_COEFFS, WORD_BITS};
 
 /// A single polynomial coefficient: [`COEFF_BITS`] = 17 bits.
@@ -62,6 +63,43 @@ impl PolySignal {
         Self { coeffs }
     }
 
+    /// Converts back to a [`minroot_core::polynomial::PolyElement`].
+    ///
+    /// Each [`Bits<17>`](Coeff) coefficient is narrowed to `u32` and packed
+    /// into the polynomial form.  This is the inverse of
+    /// [`from_poly_element`](Self::from_poly_element) for values that
+    /// originated from a field element.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`minroot_core::error::Error::OutOfRange`] if any
+    /// coefficient exceeds [`COEFF_BITS`] bits.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use minroot_core::field::{Curve, FieldElement};
+    /// use minroot_core::polynomial::PolyElement;
+    /// use minroot_hdl::types::PolySignal;
+    ///
+    /// # fn main() -> Result<(), minroot_core::error::Error> {
+    /// let fe = FieldElement::from_u64(42, Curve::Pallas);
+    /// let signal = PolySignal::from_poly_element(&PolyElement::from_field(fe));
+    /// let roundtrip = signal.to_poly_element(Curve::Pallas)?.to_field()?;
+    /// assert_eq!(roundtrip, fe);
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[allow(clippy::cast_possible_truncation)]
+    pub fn to_poly_element(
+        &self,
+        curve: minroot_core::field::Curve,
+    ) -> Result<minroot_core::polynomial::PolyElement, minroot_core::error::Error> {
+        let coeffs = core::array::from_fn(|i| {
+            bits_ext::to_u128(self.coeff(i)) as u32
+        });
+        minroot_core::polynomial::PolyElement::from_coeffs(coeffs, curve)
+    }
 }
 
 impl core::ops::Add for PolySignal {
@@ -99,6 +137,19 @@ pub enum MulControl {
     Bypass,
     /// Multiply: multiply the squared value by the base.
     Multiply,
+}
+
+impl From<RoundControl> for MulControl {
+    /// Converts a categorical [`RoundControl`] to a hardware [`MulControl`].
+    ///
+    /// [`RoundControl::SquareOnly`] maps to [`MulControl::Bypass`] and
+    /// [`RoundControl::SquareAndMultiply`] maps to [`MulControl::Multiply`].
+    fn from(ctrl: RoundControl) -> Self {
+        match ctrl {
+            RoundControl::SquareOnly => Self::Bypass,
+            RoundControl::SquareAndMultiply => Self::Multiply,
+        }
+    }
 }
 
 /// Pipeline stage state: tracks which exponent bit is being processed.
@@ -149,6 +200,32 @@ impl PipelineState {
     pub fn is_active(&self) -> bool {
         self.active
     }
+
+    /// Constructs a pipeline state with explicit control over all fields.
+    ///
+    /// Used by the engine's tick logic to advance the computation
+    /// while preserving the accumulator value and active flag.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use minroot_hdl::types::{PipelineState, PolySignal};
+    ///
+    /// let base = PolySignal::default();
+    /// let accum = PolySignal::default();
+    /// let state = PipelineState::advance(base, accum, 100, true);
+    /// assert_eq!(state.bit_position(), 100);
+    /// assert!(state.is_active());
+    /// ```
+    #[must_use]
+    pub fn advance(
+        base: PolySignal,
+        accum: PolySignal,
+        bit_position: u16,
+        active: bool,
+    ) -> Self {
+        Self { accum, base, bit_position, active }
+    }
 }
 
 /// Number of bits in a word (re-exported for convenience).
@@ -196,5 +273,51 @@ mod tests {
         let state = PipelineState::new(PolySignal::default(), 254);
         assert_eq!(state.bit_position(), 254);
         assert!(state.is_active());
+    }
+
+    #[test]
+    fn pipeline_state_advance_preserves_accum() {
+        let base = PolySignal::default();
+        let accum_coeffs = core::array::from_fn(|i| {
+            Bits::<{ COEFF_BITS }>::new_wrapping(u128::try_from(i + 1).unwrap_or(0))
+        });
+        let accum = PolySignal::from_coeffs(accum_coeffs);
+        let state = PipelineState::advance(base, accum, 42, true);
+        assert_eq!(*state.accum(), accum);
+        assert_eq!(state.bit_position(), 42);
+        assert!(state.is_active());
+    }
+
+    #[test]
+    fn pipeline_state_advance_inactive() {
+        let state = PipelineState::advance(
+            PolySignal::default(),
+            PolySignal::default(),
+            0,
+            false,
+        );
+        assert!(!state.is_active());
+    }
+
+    #[test]
+    fn poly_signal_to_poly_element_roundtrip() {
+        let fe = minroot_core::field::FieldElement::from_u64(12345, minroot_core::field::Curve::Pallas);
+        let pe = minroot_core::polynomial::PolyElement::from_field(fe);
+        let signal = PolySignal::from_poly_element(&pe);
+        let back = signal.to_poly_element(minroot_core::field::Curve::Pallas);
+        assert!(back.iter().all(|p| p.to_field() == Ok(fe)));
+    }
+
+    #[test]
+    fn mul_control_from_round_control() {
+        use minroot_cat::schedule::RoundControl;
+        assert_eq!(
+            MulControl::from(RoundControl::SquareOnly),
+            MulControl::Bypass,
+        );
+        assert_eq!(
+            MulControl::from(RoundControl::SquareAndMultiply),
+            MulControl::Multiply,
+        );
     }
 }
