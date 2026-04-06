@@ -1,6 +1,6 @@
-//! hdl-cat [`Testbench`] simulation for MinRoot circuits.
+//! hdl-cat [`Testbench`] simulation for `MinRoot` circuits.
 //!
-//! Provides helpers to simulate MinRoot circuit blocks using hdl-cat's
+//! Provides helpers to simulate `MinRoot` circuit blocks using hdl-cat's
 //! cycle-accurate [`Testbench`] and generate VCD waveform traces for
 //! debugging and verification.
 //!
@@ -13,7 +13,7 @@
 //! # VCD Trace Generation
 //!
 //! [`trace_combinational_vcd`] and [`trace_sync_vcd`] produce Value
-//! Change Dump (VCD) output suitable for viewing in GTKWave or
+//! Change Dump (VCD) output suitable for viewing in `GTKWave` or
 //! similar waveform viewers.
 //!
 //! # Examples
@@ -97,6 +97,7 @@ use comp_cat_rs::effect::io::Io;
 ///
 /// [`Sync::lift_comb`]: hdl_cat::sync::Sync::lift_comb
 /// [`Testbench`]: hdl_cat::sim::Testbench
+#[must_use]
 pub fn simulate_combinational<I, O>(
     arrow: CircuitArrow<I, O>,
     inputs: Vec<BitSeq>,
@@ -112,7 +113,7 @@ where
 ///
 /// Wraps the [`CircuitArrow`] in a stateless [`Sync`] machine and
 /// produces a VCD (Value Change Dump) string for viewing in
-/// waveform viewers such as GTKWave.
+/// waveform viewers such as `GTKWave`.
 ///
 /// # Errors
 ///
@@ -167,6 +168,7 @@ where
 /// # Ok(())
 /// # }
 /// ```
+#[must_use]
 pub fn simulate_sync<S, I, O>(
     machine: Sync<S, I, O>,
     inputs: Vec<BitSeq>,

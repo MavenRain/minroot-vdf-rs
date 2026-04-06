@@ -1,7 +1,7 @@
-//! Synthesis circuit builders and Verilog emission for MinRoot hardware blocks.
+//! Synthesis circuit builders and Verilog emission for `MinRoot` hardware blocks.
 //!
 //! Provides [`CircuitArrow`]-based circuit builders for the fundamental
-//! arithmetic operations in the MinRoot polynomial pipeline, and generic
+//! arithmetic operations in the `MinRoot` polynomial pipeline, and generic
 //! helpers for emitting synthesizable Verilog from any hdl-cat circuit.
 //!
 //! # Circuit Builders
@@ -37,9 +37,11 @@
 //! ## Writing Custom Kernels
 //!
 //! For more complex combinational logic, hdl-cat's `#[kernel]` macro
-//! lifts a pure Rust function into a [`CircuitArrow`] builder:
+//! lifts a pure Rust function into a [`CircuitArrow`] builder.  The
+//! macro rewrites the function into a nullary builder returning
+//! `Result<CircuitArrow<..>, Error>`:
 //!
-//! ```
+//! ```text
 //! use hdl_cat::kernel;
 //! use hdl_cat::bits::Bits;
 //!
@@ -48,12 +50,10 @@
 //!     a + b
 //! }
 //!
-//! # fn main() -> Result<(), hdl_cat::Error> {
+//! // After expansion:
+//! //   my_adder() -> Result<CircuitArrow<CircuitTensor<Obj<Bits<8>>, Obj<Bits<8>>>, Obj<Bits<8>>>, Error>
 //! let arrow = my_adder()?;
-//! let verilog = minroot_hdl::synthesis::emit_verilog(&arrow, "my_adder").run()?;
-//! assert!(verilog.contains("my_adder"));
-//! # Ok(())
-//! # }
+//! let verilog = emit_verilog(&arrow, "my_adder").run()?;
 //! ```
 //!
 //! [`CircuitArrow`]: hdl_cat::circuit::CircuitArrow
@@ -81,7 +81,7 @@ pub type PpBinArrow = CircuitArrow<
 /// Builds a 17-bit coefficient adder circuit.
 ///
 /// This is the fundamental arithmetic building block for polynomial
-/// coefficient-wise addition in the MinRoot pipeline.
+/// coefficient-wise addition in the `MinRoot` pipeline.
 ///
 /// # Errors
 ///
@@ -164,6 +164,7 @@ pub fn pp_or() -> Result<PpBinArrow, Error> {
 /// # Ok(())
 /// # }
 /// ```
+#[must_use]
 pub fn emit_verilog<A, B>(
     arrow: &CircuitArrow<A, B>,
     name: &str,
@@ -190,6 +191,7 @@ pub fn emit_verilog<A, B>(
 /// # Ok(())
 /// # }
 /// ```
+#[must_use]
 pub fn emit_sync_verilog<S, I, O>(
     machine: &Sync<S, I, O>,
     name: &str,

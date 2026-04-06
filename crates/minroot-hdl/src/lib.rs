@@ -31,5 +31,6 @@ pub mod engine;
 pub mod poly_mul;
 pub mod poly_reduce;
 pub mod poly_sqr;
+pub mod synthesis;
 pub mod tree;
 pub mod types;
