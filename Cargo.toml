@@ -14,10 +14,10 @@ repository = "https://github.com/MavenRain/minroot-vdf-rs"
 
 [workspace.dependencies]
 comp-cat-rs = "0.5"
-minroot-core = { path = "crates/minroot-core" }
-minroot-cat = { path = "crates/minroot-cat" }
-minroot-hdl = { path = "crates/minroot-hdl" }
-minroot-sim = { path = "crates/minroot-sim" }
+minroot-core = { version = "0.1.0", path = "crates/minroot-core" }
+minroot-cat = { version = "0.1.0", path = "crates/minroot-cat" }
+minroot-hdl = { version = "0.1.0", path = "crates/minroot-hdl" }
+minroot-sim = { version = "0.1.0", path = "crates/minroot-sim" }
 hdl-cat = "0.1"
 proptest = "1"
 
