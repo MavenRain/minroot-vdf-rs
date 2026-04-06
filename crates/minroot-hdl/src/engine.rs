@@ -120,7 +120,7 @@ impl FifthRootEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rhdl::bits::Bits;
+    use hdl_cat::bits::Bits;
 
     #[test]
     fn engine_starts_idle() {
@@ -135,7 +135,7 @@ mod tests {
         let input = EngineInput {
             load: true,
             load_value: PolySignal::from_coeffs(core::array::from_fn(|i| {
-                if i == 0 { Bits::from(7u128) } else { Bits::from(0u128) }
+                if i == 0 { Bits::new_wrapping(7u128) } else { Bits::new_wrapping(0u128) }
             })),
             load_bits: 254,
             ..EngineInput::default()

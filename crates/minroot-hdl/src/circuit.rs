@@ -1,7 +1,8 @@
-//! Circuit abstraction traits modeling RHDL conventions.
+//! Circuit abstraction traits modeling hdl-cat conventions.
 //!
-//! These traits capture the synchronous circuit semantics that RHDL's
-//! `#[derive(Synchronous)]` would generate.  A synchronous circuit has:
+//! These traits capture the synchronous circuit semantics that
+//! hdl-cat's [`Sync`] and [`CircuitArrow`] model structurally.
+//! A synchronous circuit has:
 //!
 //! - **Input** (`I`): signals driven from outside
 //! - **Output** (`O`): signals driven by this circuit
@@ -9,13 +10,16 @@
 //!
 //! The kernel function computes `(output, next_state)` from
 //! `(input, current_state)` purely, with no side effects.
+//!
+//! [`Sync`]: hdl_cat::sync::Sync
+//! [`CircuitArrow`]: hdl_cat::circuit::CircuitArrow
 
 /// A synchronous (single-clock-domain) circuit.
 ///
 /// Models a clocked hardware block: on each rising edge, the kernel
 /// reads the current input and state, produces output and next state.
 ///
-/// This matches RHDL's `Synchronous` trait pattern:
+/// This matches hdl-cat's Mealy machine pattern:
 /// ```text
 /// fn kernel(input: I, state: S) -> (O, S)
 /// ```

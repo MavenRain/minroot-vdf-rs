@@ -3,7 +3,7 @@
 //! Produces streams of `MinRoot` test cases for hardware verification.
 //! Each vector specifies initial `(x, y)` coordinates and an iteration
 //! count.  The reference model in [`crate::verify`] computes expected
-//! outputs for comparison with RHDL simulation results.
+//! outputs for comparison with hdl-cat simulation results.
 //!
 //! [`Stream`]: comp_cat_rs::effect::stream::Stream
 

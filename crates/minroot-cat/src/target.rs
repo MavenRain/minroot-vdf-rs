@@ -1,6 +1,6 @@
 //! FPGA/ASIC target abstraction.
 //!
-//! The `MinRoot` hardware generates target-agnostic Verilog via RHDL.
+//! The `MinRoot` hardware generates target-agnostic Verilog via hdl-cat.
 //! Technology-specific cells (clock gating, multiplier hints) are
 //! parameterized by the [`Target`] trait, allowing a single design
 //! to produce correct output for both FPGA prototyping and ASIC

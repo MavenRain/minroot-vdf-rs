@@ -1,6 +1,6 @@
 //! Reference model verification.
 //!
-//! Compares RHDL simulation outputs against the pure-Rust `MinRoot`
+//! Compares hdl-cat simulation outputs against the pure-Rust `MinRoot`
 //! reference implementation in [`minroot_core`].  A test passes if
 //! the hardware result matches the software result bit-for-bit.
 

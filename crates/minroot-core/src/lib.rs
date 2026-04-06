@@ -6,7 +6,7 @@
 //!
 //! This crate has zero dependencies and serves two purposes:
 //!
-//! 1. **Reference model** for verifying RHDL hardware simulations.
+//! 1. **Reference model** for verifying hdl-cat hardware simulations.
 //! 2. **Domain types** shared across the categorical and HDL layers.
 //!
 //! # Examples

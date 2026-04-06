@@ -1,10 +1,10 @@
 //! Hardware signal types for the `MinRoot` pipeline.
 //!
-//! All types use [`rhdl::bits::Bits`] for fixed-width signals.
+//! All types use [`hdl_cat::bits::Bits`] for fixed-width signals.
 //! The polynomial representation uses 17 coefficients of 17 bits each,
 //! matching the `SystemVerilog` `mrt_pkg` parameters.
 
-use rhdl::bits::Bits;
+use hdl_cat::bits::Bits;
 
 use crate::bits_ext;
 use minroot_core::polynomial::{COEFF_BITS, NUM_COEFFS, WORD_BITS};
@@ -13,7 +13,6 @@ use minroot_core::polynomial::{COEFF_BITS, NUM_COEFFS, WORD_BITS};
 pub type Coeff = Bits<{ COEFF_BITS }>;
 
 /// Returns a zero coefficient.
-#[must_use]
 pub fn zero_coeff() -> Coeff {
     bits_ext::zero()
 }
@@ -30,7 +29,7 @@ pub struct PolySignal {
 impl Default for PolySignal {
     fn default() -> Self {
         Self {
-            coeffs: [Bits::from(0u128); NUM_COEFFS],
+            coeffs: [Bits::ZERO; NUM_COEFFS],
         }
     }
 }
@@ -43,13 +42,11 @@ impl PolySignal {
     }
 
     /// Returns the coefficient array.
-    #[must_use]
     pub fn coeffs(&self) -> &[Coeff; NUM_COEFFS] {
         &self.coeffs
     }
 
     /// Returns a single coefficient by index, or [`zero_coeff()`] if out of bounds.
-    #[must_use]
     pub fn coeff(&self, i: usize) -> Coeff {
         self.coeffs.get(i).copied().unwrap_or(zero_coeff())
     }
@@ -60,7 +57,7 @@ impl PolySignal {
         let coeffs = core::array::from_fn(|i| {
             pe.coeffs()
                 .get(i)
-                .map_or(zero_coeff(), |&c| Bits::from(u128::from(c)))
+                .map_or(zero_coeff(), |&c| Bits::new_wrapping(u128::from(c)))
         });
         Self { coeffs }
     }
@@ -87,7 +84,6 @@ impl core::ops::Add for PolySignal {
 pub type PartialProduct = Bits<{ COEFF_BITS * 2 }>;
 
 /// Returns a zero partial product.
-#[must_use]
 pub fn zero_pp() -> PartialProduct {
     bits_ext::zero()
 }
@@ -177,14 +173,14 @@ mod tests {
     #[test]
     fn poly_signal_add_coeffwise() {
         let a_coeffs: [Coeff; NUM_COEFFS] =
-            core::array::from_fn(|i| Bits::from(u128::try_from(i).unwrap_or(0)));
+            core::array::from_fn(|i| Bits::new_wrapping(u128::try_from(i).unwrap_or(0)));
         let b_coeffs: [Coeff; NUM_COEFFS] =
-            core::array::from_fn(|i| Bits::from(u128::try_from(i * 2).unwrap_or(0)));
+            core::array::from_fn(|i| Bits::new_wrapping(u128::try_from(i * 2).unwrap_or(0)));
         let a = PolySignal::from_coeffs(a_coeffs);
         let b = PolySignal::from_coeffs(b_coeffs);
         let sum = a + b;
         sum.coeffs().iter().enumerate().for_each(|(i, c)| {
-            let expected = Bits::<{ COEFF_BITS }>::from(u128::try_from(i * 3).unwrap_or(0));
+            let expected = Bits::<{ COEFF_BITS }>::new_wrapping(u128::try_from(i * 3).unwrap_or(0));
             assert_eq!(*c, expected);
         });
     }

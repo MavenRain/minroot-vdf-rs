@@ -1,7 +1,7 @@
-//! RHDL hardware blocks for the `MinRoot` VDF.
+//! Hardware blocks for the `MinRoot` VDF.
 //!
 //! Concrete hardware implementations interpreted from the categorical
-//! pipeline specifications in [`minroot_cat`].  Uses [`rhdl::bits::Bits`]
+//! pipeline specifications in [`minroot_cat`].  Uses [`hdl_cat::bits::Bits`]
 //! for fixed-width signal types.
 //!
 //! # Examples

@@ -16,7 +16,7 @@
 //! By encoding the pipeline as a free category, we separate the topology
 //! (what connects to what) from the implementation (how each stage computes).
 //! The free category's universal property gives us [`interpret`]: any
-//! graph morphism into a target category (e.g., RHDL circuits) extends
+//! graph morphism into a target category (e.g., hdl-cat circuits) extends
 //! uniquely to a functor, producing the composed hardware pipeline.
 //!
 //! [`interpret`]: comp_cat_rs::collapse::free_category::interpret

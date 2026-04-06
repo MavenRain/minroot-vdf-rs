@@ -30,13 +30,11 @@ impl CarrySavePair {
     }
 
     /// Returns the sum component.
-    #[must_use]
     pub fn sum(&self) -> PartialProduct {
         self.sum
     }
 
     /// Returns the carry component.
-    #[must_use]
     pub fn carry(&self) -> PartialProduct {
         self.carry
     }
@@ -46,7 +44,6 @@ impl CarrySavePair {
     /// Computes `sum + (carry << 1)`.  This introduces a carry chain
     /// and should only be used at the final output, not in the
     /// pipeline critical path.
-    #[must_use]
     pub fn resolve(self) -> PartialProduct {
         self.sum + (self.carry << 1)
     }
@@ -112,12 +109,13 @@ pub fn compress(inputs: &[PartialProduct]) -> CarrySavePair {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use hdl_cat::bits::Bits;
 
     #[test]
     fn compressor_3to2_basic() {
-        let a: PartialProduct = 0b101u128.into();
-        let b: PartialProduct = 0b011u128.into();
-        let c: PartialProduct = 0b110u128.into();
+        let a: PartialProduct = Bits::new_wrapping(0b101u128);
+        let b: PartialProduct = Bits::new_wrapping(0b011u128);
+        let c: PartialProduct = Bits::new_wrapping(0b110u128);
         let csp = Compressor3to2::eval((a, b, c));
         let resolved = csp.resolve();
         assert_eq!(
@@ -134,15 +132,15 @@ mod tests {
 
     #[test]
     fn compress_single() {
-        let pp: PartialProduct = 42u128.into();
+        let pp: PartialProduct = Bits::new_wrapping(42u128);
         let csp = compress(&[pp]);
         assert_eq!(csp.sum(), pp);
     }
 
     #[test]
     fn compress_pair() {
-        let a: PartialProduct = 10u128.into();
-        let b: PartialProduct = 20u128.into();
+        let a: PartialProduct = Bits::new_wrapping(10u128);
+        let b: PartialProduct = Bits::new_wrapping(20u128);
         let csp = compress(&[a, b]);
         assert_eq!(bits_ext::to_u128(csp.resolve()), 10 + 20);
     }
@@ -150,7 +148,7 @@ mod tests {
     #[test]
     fn compress_multiple() {
         let inputs: Vec<PartialProduct> = (1u128..=5)
-            .map(Into::into)
+            .map(Bits::new_wrapping)
             .collect();
         let csp = compress(&inputs);
         assert_eq!(bits_ext::to_u128(csp.resolve()), 1 + 2 + 3 + 4 + 5);

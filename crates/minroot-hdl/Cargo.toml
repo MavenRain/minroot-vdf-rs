@@ -1,7 +1,7 @@
 [package]
 name = "minroot-hdl"
 version = "0.1.0"
-description = "RHDL hardware blocks for MinRoot VDF"
+description = "hdl-cat hardware blocks for MinRoot VDF"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -10,7 +10,7 @@ repository.workspace = true
 comp-cat-rs.workspace = true
 minroot-core.workspace = true
 minroot-cat.workspace = true
-rhdl.workspace = true
+hdl-cat.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true

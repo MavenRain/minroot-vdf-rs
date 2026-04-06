@@ -30,15 +30,15 @@ impl Combinational for PolySqr {
 mod tests {
     use super::*;
     use crate::types::HW_COEFF_BITS;
-    use rhdl::bits::Bits;
+    use hdl_cat::bits::Bits;
 
     #[test]
     fn sqr_matches_mul_self() {
         let coeffs = core::array::from_fn(|i| {
             if i < 3 {
-                Bits::<{ HW_COEFF_BITS }>::from(u128::try_from(i + 1).unwrap_or(0))
+                Bits::<{ HW_COEFF_BITS }>::new_wrapping(u128::try_from(i + 1).unwrap_or(0))
             } else {
-                Bits::from(0u128)
+                Bits::new_wrapping(0u128)
             }
         });
         let a = PolySignal::from_coeffs(coeffs);

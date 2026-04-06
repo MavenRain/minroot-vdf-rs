@@ -2,7 +2,7 @@
 //!
 //! Uses [`comp_cat_rs::effect::io::Io`] for simulation orchestration,
 //! [`comp_cat_rs::effect::stream::Stream`] for test vector generation,
-//! and compares RHDL hardware outputs against the
+//! and compares hdl-cat hardware outputs against the
 //! [`minroot_core`] reference model.
 //!
 //! # Examples

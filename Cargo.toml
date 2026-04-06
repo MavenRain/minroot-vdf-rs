@@ -18,7 +18,7 @@ minroot-core = { path = "crates/minroot-core" }
 minroot-cat = { path = "crates/minroot-cat" }
 minroot-hdl = { path = "crates/minroot-hdl" }
 minroot-sim = { path = "crates/minroot-sim" }
-rhdl = { git = "https://github.com/samitbasu/rhdl.git" }
+hdl-cat = "0.1"
 proptest = "1"
 
 [workspace.lints.clippy]

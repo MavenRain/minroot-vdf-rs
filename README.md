@@ -1,6 +1,6 @@
 # minroot-vdf-rs
 
-A Rust implementation of the [MinRoot](https://eprint.iacr.org/2022/1626) Verifiable Delay Function (VDF) hardware, targeting RHDL and built on the comp-cat-rs categorical effect system.
+A Rust implementation of the [MinRoot](https://eprint.iacr.org/2022/1626) Verifiable Delay Function (VDF) hardware, targeting hdl-cat and built on the comp-cat-rs categorical effect system.
 
 This is a port of [supranational/minroot_hardware](https://github.com/supranational/minroot_hardware) (SystemVerilog) to Rust, with categorical abstractions modeling the pipeline ring as a traced monoidal category.
 
@@ -10,7 +10,7 @@ This is a port of [supranational/minroot_hardware](https://github.com/supranatio
 |---|---|
 | [`minroot-core`](crates/minroot-core) | Pure Rust reference model: Pallas/Vesta field arithmetic, Montgomery form, redundant polynomial representation, MinRoot VDF algorithm |
 | [`minroot-cat`](crates/minroot-cat) | Categorical pipeline abstractions: `PipelineGraph` (free category), `Traced` monoidal category (ring feedback), `InterleaveK<N>` product functor, `exponent_schedule` catamorphism, `Target` trait for FPGA/ASIC |
-| [`minroot-hdl`](crates/minroot-hdl) | RHDL hardware blocks: `PolySignal`, Wallace tree CSA compressor, `PolyMul`, `PolySqr`, `PolyReduce`, `FifthRootEngine`, clock gating |
+| [`minroot-hdl`](crates/minroot-hdl) | hdl-cat hardware blocks: `PolySignal`, Wallace tree CSA compressor, `PolyMul`, `PolySqr`, `PolyReduce`, `FifthRootEngine`, clock gating |
 | [`minroot-sim`](crates/minroot-sim) | `Io`/`Stream`-based simulation harness with reference-model verification |
 
 ## Architecture
@@ -25,7 +25,7 @@ minroot-core        -- Pure field arithmetic, reference MinRoot
 minroot-cat         -- Categorical pipeline (PipelineCat, Traced, Interleave)
     |
     v
-minroot-hdl         -- RHDL hardware blocks interpreted from categorical specs
+minroot-hdl         -- hdl-cat hardware blocks interpreted from categorical specs
     |
     v
 minroot-sim         -- Io/Stream simulation harness
@@ -41,7 +41,7 @@ The MinRoot fifth-root pipeline decomposes into:
 - **Exponent bit scanning** as a catamorphism: `Stream::unfold` over 254 bits producing `RoundControl` signals
 - **FPGA/ASIC targeting** as target-specific cell selection via the `Target` trait
 
-The free category's universal property bridges the abstract pipeline spec and its concrete RHDL implementation: any `GraphMorphism` from `PipelineGraph` extends uniquely to a functor into the category of RHDL circuits.
+The free category's universal property bridges the abstract pipeline spec and its concrete hdl-cat implementation: any `GraphMorphism` from `PipelineGraph` extends uniquely to a functor into the category of hdl-cat circuits.
 
 ## Build and Test
 
@@ -64,7 +64,7 @@ cargo doc --no-deps --document-private-items --workspace --open
 
 ## Dual FPGA/ASIC Targeting
 
-RHDL generates target-agnostic Verilog.  Technology-specific cells (clock gating, multiplier inference) are abstracted by the `minroot_cat::target::Target` trait:
+hdl-cat generates target-agnostic Verilog.  Technology-specific cells (clock gating, multiplier inference) are abstracted by the `minroot_cat::target::Target` trait:
 
 ```rust,ignore
 use minroot_cat::target::{Fpga, Asic, Target};

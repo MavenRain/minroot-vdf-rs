@@ -148,7 +148,7 @@ mod tests {
     use super::*;
     use crate::poly_mul::PolyMul;
     use crate::circuit::Combinational;
-    use rhdl::bits::Bits;
+    use hdl_cat::bits::Bits;
 
     #[test]
     fn reduce_zero_product_is_zero() {
@@ -162,10 +162,10 @@ mod tests {
     fn reduce_small_product() {
         // 3 * 5 = 15, which is < p, so reduction is identity
         let a = PolySignal::from_coeffs(core::array::from_fn(|i| {
-            if i == 0 { Bits::from(3u128) } else { Bits::from(0u128) }
+            if i == 0 { Bits::new_wrapping(3u128) } else { Bits::new_wrapping(0u128) }
         }));
         let b = PolySignal::from_coeffs(core::array::from_fn(|i| {
-            if i == 0 { Bits::from(5u128) } else { Bits::from(0u128) }
+            if i == 0 { Bits::new_wrapping(5u128) } else { Bits::new_wrapping(0u128) }
         }));
 
         let product = PolyMul::eval((a, b));

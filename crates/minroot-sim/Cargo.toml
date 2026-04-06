@@ -11,7 +11,7 @@ comp-cat-rs.workspace = true
 minroot-core.workspace = true
 minroot-cat.workspace = true
 minroot-hdl.workspace = true
-rhdl.workspace = true
+hdl-cat.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true

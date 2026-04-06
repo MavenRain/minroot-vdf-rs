@@ -10,7 +10,7 @@
 //! (up to `2 * NUM_COEFFS - 1` coefficients) that must be reduced
 //! by [`crate::poly_reduce`].
 
-use rhdl::bits::Bits;
+use hdl_cat::bits::Bits;
 
 use crate::bits_ext;
 use crate::circuit::Combinational;
@@ -45,13 +45,11 @@ impl UnreducedProduct {
     }
 
     /// Returns the coefficient array.
-    #[must_use]
     pub fn coeffs(&self) -> &[PartialProduct; PRODUCT_COEFFS] {
         &self.coeffs
     }
 
     /// Returns a single coefficient, or [`zero_pp()`] if out of bounds.
-    #[must_use]
     pub fn coeff(&self, i: usize) -> PartialProduct {
         self.coeffs.get(i).copied().unwrap_or(zero_pp())
     }
@@ -93,7 +91,7 @@ impl Combinational for PolyMul {
 ///
 /// `Bits<17> * Bits<17> -> Bits<34>`
 fn widen_mul(a: crate::types::Coeff, b: crate::types::Coeff) -> PartialProduct {
-    Bits::from(bits_ext::to_u128(a) * bits_ext::to_u128(b))
+    Bits::new_wrapping(bits_ext::to_u128(a) * bits_ext::to_u128(b))
 }
 
 #[cfg(test)]
@@ -103,7 +101,7 @@ mod tests {
     #[test]
     fn multiply_by_zero_is_zero() {
         let a_coeffs = core::array::from_fn(|i| {
-            Bits::<{ crate::types::HW_COEFF_BITS }>::from(u128::try_from(i + 1).unwrap_or(0))
+            Bits::<{ crate::types::HW_COEFF_BITS }>::new_wrapping(u128::try_from(i + 1).unwrap_or(0))
         });
         let a = PolySignal::from_coeffs(a_coeffs);
         let zero = PolySignal::default();
@@ -118,10 +116,10 @@ mod tests {
     fn multiply_small_values() {
         // Multiply (3) * (5) in polynomial form.
         let a_coeffs = core::array::from_fn(|i| {
-            if i == 0 { Bits::from(3u128) } else { Bits::from(0u128) }
+            if i == 0 { Bits::new_wrapping(3u128) } else { Bits::new_wrapping(0u128) }
         });
         let b_coeffs = core::array::from_fn(|i| {
-            if i == 0 { Bits::from(5u128) } else { Bits::from(0u128) }
+            if i == 0 { Bits::new_wrapping(5u128) } else { Bits::new_wrapping(0u128) }
         });
 
         let a = PolySignal::from_coeffs(a_coeffs);
