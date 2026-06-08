@@ -68,17 +68,20 @@ impl MinRootState {
 /// y'   = x + i
 /// x'   = fifth_root(temp)
 /// ```
-#[must_use]
-pub fn step(state: MinRootState) -> MinRootState {
+///
+/// # Errors
+///
+/// Propagates [`Error::Truncation`] from field arithmetic (unreachable).
+pub fn step(state: MinRootState) -> Result<MinRootState, Error> {
     let i_field = FieldElement::from_u64(state.iteration, state.curve());
-    let temp = state.x + state.y;
-    let new_y = state.x + i_field;
-    let new_x = temp.fifth_root();
-    MinRootState {
+    let temp = state.x.try_add(state.y)?;
+    let new_y = state.x.try_add(i_field)?;
+    let new_x = temp.fifth_root()?;
+    Ok(MinRootState {
         x: new_x,
         y: new_y,
         iteration: state.iteration + 1,
-    }
+    })
 }
 
 /// Runs the `MinRoot` VDF for `num_iterations` steps.
@@ -97,7 +100,7 @@ pub fn evaluate(
         Err(Error::ZeroIterations)
     } else {
         let init = MinRootState::new(x, y);
-        Ok((0..num_iterations).fold(init, |state, _| step(state)))
+        (0..num_iterations).try_fold(init, |state, _| step(state))
     }
 }
 
@@ -117,13 +120,12 @@ pub fn evaluate_trace(
         Err(Error::ZeroIterations)
     } else {
         let init = MinRootState::new(x, y);
-        Ok((0..num_iterations)
-            .fold(vec![init], |mut trace, _| {
-                // The last element is always the current state to step from.
-                let current = trace[trace.len() - 1];
-                trace.push(step(current));
-                trace
-            }))
+        (0..num_iterations).try_fold(vec![init], |mut trace, _| {
+            // The last element is always the current state to step from.
+            let current = trace[trace.len() - 1];
+            trace.push(step(current)?);
+            Ok(trace)
+        })
     }
 }
 
@@ -150,49 +152,54 @@ mod tests {
     use super::*;
 
     #[test]
-    fn single_step_deterministic() {
+    fn single_step_deterministic() -> Result<(), Error> {
         let x = FieldElement::from_u64(3, Curve::Pallas);
         let y = FieldElement::from_u64(5, Curve::Pallas);
-        let s1 = step(MinRootState::new(x, y));
-        let s2 = step(MinRootState::new(x, y));
+        let s1 = step(MinRootState::new(x, y))?;
+        let s2 = step(MinRootState::new(x, y))?;
         assert_eq!(s1, s2);
+        Ok(())
     }
 
     #[test]
-    fn step_modifies_state() {
+    fn step_modifies_state() -> Result<(), Error> {
         let x = FieldElement::from_u64(3, Curve::Pallas);
         let y = FieldElement::from_u64(5, Curve::Pallas);
         let init = MinRootState::new(x, y);
-        let after = step(init);
+        let after = step(init)?;
         // x should change (fifth root of 8 is not 3)
         assert_ne!(after.x(), init.x());
         // y should be x + 0 = 3
         assert_eq!(after.y(), x);
         assert_eq!(after.iteration(), 1);
+        Ok(())
     }
 
     #[test]
-    fn fifth_root_consistency() {
+    fn fifth_root_consistency() -> Result<(), Error> {
         // After one step: x' = fifth_root(x + y), so x'^5 = x + y
         let x = FieldElement::from_u64(3, Curve::Pallas);
         let y = FieldElement::from_u64(5, Curve::Pallas);
-        let after = step(MinRootState::new(x, y));
+        let after = step(MinRootState::new(x, y))?;
         let x_prime = after.x();
-        let x5 = x_prime * x_prime * x_prime * x_prime * x_prime;
-        assert_eq!(x5, x + y);
+        let x5 = x_prime.try_mul(x_prime)?.try_mul(x_prime)?.try_mul(x_prime)?.try_mul(x_prime)?;
+        assert_eq!(x5, x.try_add(y)?);
+        Ok(())
     }
 
     #[test]
-    fn evaluate_matches_iterated_step() {
+    fn evaluate_matches_iterated_step() -> Result<(), Error> {
         let x = FieldElement::from_u64(10, Curve::Pallas);
         let y = FieldElement::from_u64(20, Curve::Pallas);
         let n = 3;
         let eval_result = evaluate(x, y, n);
-        let step_result = (0..n).fold(MinRootState::new(x, y), |s, _| step(s));
+        let step_result =
+            (0..n).try_fold(MinRootState::new(x, y), |s, _| step(s))?;
         assert_eq!(
             eval_result.map(|r| (r.x(), r.y())),
             Ok((step_result.x(), step_result.y()))
         );
+        Ok(())
     }
 
     #[test]

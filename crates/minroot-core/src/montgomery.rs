@@ -14,7 +14,6 @@
 
 use crate::error::Error;
 use crate::field::{Curve, FieldElement};
-use core::ops;
 
 /// Number of bits in the Montgomery constant R.
 ///
@@ -48,10 +47,13 @@ impl MontgomeryElement {
     /// Returns the Montgomery representation `aR mod p`.
     ///
     /// This is what the hardware stores internally.
-    #[must_use]
-    pub fn to_mont_repr(self) -> FieldElement {
+    ///
+    /// # Errors
+    ///
+    /// Propagates [`Error::Truncation`] from field doubling (unreachable).
+    pub fn to_mont_repr(self) -> Result<FieldElement, Error> {
         // Compute a * 2^128 mod p by repeated doubling.
-        (0..MONT_BITS).fold(self.standard, |acc, _| acc + acc)
+        (0..MONT_BITS).try_fold(self.standard, |acc, _| acc.try_add(acc))
     }
 
     /// Constructs from a Montgomery representation `aR mod p`.
@@ -66,9 +68,12 @@ impl MontgomeryElement {
     }
 
     /// Montgomery squaring.
-    #[must_use]
-    pub fn sqr(self) -> Self {
-        self * self
+    ///
+    /// # Errors
+    ///
+    /// Propagates [`Error::Truncation`] from multiplication (unreachable).
+    pub fn sqr(self) -> Result<Self, Error> {
+        self.try_mul(self)
     }
 
     /// Returns the curve.
@@ -94,19 +99,25 @@ impl MontgomeryElement {
     }
 
     /// Modular exponentiation.
-    #[must_use]
-    pub fn pow(self, exp: &[u64; 4], num_bits: usize) -> Self {
-        Self {
-            standard: self.standard.pow(exp, num_bits),
-        }
+    ///
+    /// # Errors
+    ///
+    /// Propagates [`Error::Truncation`] from exponentiation (unreachable).
+    pub fn pow(self, exp: &[u64; 4], num_bits: usize) -> Result<Self, Error> {
+        Ok(Self {
+            standard: self.standard.pow(exp, num_bits)?,
+        })
     }
 
     /// Computes the fifth root.
-    #[must_use]
-    pub fn fifth_root(self) -> Self {
-        Self {
-            standard: self.standard.fifth_root(),
-        }
+    ///
+    /// # Errors
+    ///
+    /// Propagates [`Error::Truncation`] from exponentiation (unreachable).
+    pub fn fifth_root(self) -> Result<Self, Error> {
+        Ok(Self {
+            standard: self.standard.fifth_root()?,
+        })
     }
 
     /// Constructs from raw limbs in Montgomery representation.
@@ -125,15 +136,17 @@ impl MontgomeryElement {
     }
 }
 
-impl ops::Mul for MontgomeryElement {
-    type Output = Self;
-
+impl MontgomeryElement {
     /// Montgomery multiplication: produces `a * b` in the Montgomery domain.
-    fn mul(self, rhs: Self) -> Self {
+    ///
+    /// # Errors
+    ///
+    /// Propagates [`Error::Truncation`] from field multiplication (unreachable).
+    pub fn try_mul(self, rhs: Self) -> Result<Self, Error> {
         debug_assert_eq!(self.standard.curve(), rhs.standard.curve());
-        Self {
-            standard: self.standard * rhs.standard,
-        }
+        Ok(Self {
+            standard: self.standard.try_mul(rhs.standard)?,
+        })
     }
 }
 
@@ -196,55 +209,61 @@ mod tests {
     }
 
     #[test]
-    fn mont_repr_roundtrip() {
+    fn mont_repr_roundtrip() -> Result<(), Error> {
         let x = FieldElement::from_u64(42, Curve::Pallas);
         let m = MontgomeryElement::from_field(x);
-        let repr = m.to_mont_repr();
+        let repr = m.to_mont_repr()?;
         let recovered = MontgomeryElement::from_mont_repr(repr);
         assert_eq!(recovered.to_field(), x);
+        Ok(())
     }
 
     #[test]
-    fn mont_mul_matches_field_mul() {
+    fn mont_mul_matches_field_mul() -> Result<(), Error> {
         let a = FieldElement::from_u64(123, Curve::Pallas);
         let b = FieldElement::from_u64(456, Curve::Pallas);
-        let expected = a * b;
+        let expected = a.try_mul(b)?;
 
         let ma = MontgomeryElement::from_field(a);
         let mb = MontgomeryElement::from_field(b);
-        let result = (ma * mb).to_field();
+        let result = ma.try_mul(mb)?.to_field();
         assert_eq!(result, expected);
+        Ok(())
     }
 
     #[test]
-    fn mont_fifth_root_roundtrip() {
+    fn mont_fifth_root_roundtrip() -> Result<(), Error> {
         let x = FieldElement::from_u64(7, Curve::Pallas);
         let mx = MontgomeryElement::from_field(x);
-        let root = mx.fifth_root();
-        let root5 = root * root * root * root * root;
+        let root = mx.fifth_root()?;
+        let root5 = root.try_mul(root)?.try_mul(root)?.try_mul(root)?.try_mul(root)?;
         assert_eq!(root5.to_field(), x);
+        Ok(())
     }
 
     #[test]
-    fn mont_repr_of_zero_is_zero() {
+    fn mont_repr_of_zero_is_zero() -> Result<(), Error> {
         let z = MontgomeryElement::zero(Curve::Pallas);
-        assert_eq!(z.to_mont_repr(), FieldElement::zero(Curve::Pallas));
+        assert_eq!(z.to_mont_repr()?, FieldElement::zero(Curve::Pallas));
+        Ok(())
     }
 
     #[test]
-    fn halve_double_roundtrip() {
+    fn halve_double_roundtrip() -> Result<(), Error> {
         let x = FieldElement::from_u64(99, Curve::Pallas);
-        let doubled = x + x;
+        let doubled = x.try_add(x)?;
         let halved = halve_mod_p(doubled);
         assert_eq!(halved, x);
+        Ok(())
     }
 
     #[test]
-    fn halve_odd_value() {
+    fn halve_odd_value() -> Result<(), Error> {
         // 7 / 2 mod p = (7 + p) / 2
         let x = FieldElement::from_u64(7, Curve::Pallas);
         let half = halve_mod_p(x);
         // half + half = 7 mod p
-        assert_eq!(half + half, x);
+        assert_eq!(half.try_add(half)?, x);
+        Ok(())
     }
 }

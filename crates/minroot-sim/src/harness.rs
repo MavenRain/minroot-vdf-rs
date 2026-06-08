@@ -209,7 +209,7 @@ pub fn run_engine_cubed(
         .to_poly_element(curve)?
         .to_field()?;
 
-    let expected = x * x * x;
+    let expected = x.try_mul(x)?.try_mul(x)?;
     let expected_state = minroot::MinRootState::new(expected, FieldElement::zero(curve));
     let matched = hw_result == expected;
     Ok(VerificationResult::new(expected_state, matched))

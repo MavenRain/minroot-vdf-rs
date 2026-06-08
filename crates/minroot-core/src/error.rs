@@ -21,6 +21,11 @@ pub enum Error {
     DivisionByZero,
     /// Iteration count must be positive.
     ZeroIterations,
+    /// A 128-bit intermediate did not fit into a 64-bit limb.
+    ///
+    /// Internal invariant violation: limb extraction masks to 64 bits
+    /// before the checked conversion, so this is unreachable in practice.
+    Truncation,
 }
 
 impl fmt::Display for Error {
@@ -38,6 +43,9 @@ impl fmt::Display for Error {
             Self::DivisionByZero => write!(f, "division by zero in field"),
             Self::ZeroIterations => {
                 write!(f, "iteration count must be positive")
+            }
+            Self::Truncation => {
+                write!(f, "128-bit intermediate did not fit into a 64-bit limb")
             }
         }
     }

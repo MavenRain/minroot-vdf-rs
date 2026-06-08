@@ -10,7 +10,6 @@
 //! - **Vesta**:  `0x40000000000000000000000000000000224698fc0994a8dd8c46eb2100000001`
 
 use crate::error::Error;
-use core::ops;
 
 /// Number of 64-bit limbs in a field element.
 const LIMBS: usize = 4;
@@ -169,32 +168,41 @@ impl FieldElement {
     }
 
     /// Modular squaring: `self * self mod p`.
-    #[must_use]
-    pub fn sqr(self) -> Self {
-        self * self
+    ///
+    /// # Errors
+    ///
+    /// Propagates [`Error::Truncation`] from multiplication (unreachable).
+    pub fn sqr(self) -> Result<Self, Error> {
+        self.try_mul(self)
     }
 
     /// Modular exponentiation via square-and-multiply.
     ///
     /// The exponent is given as little-endian limbs with `num_bits`
     /// significant bits.
-    #[must_use]
-    pub fn pow(self, exp: &[u64; LIMBS], num_bits: usize) -> Self {
-        (0..num_bits).rev().fold(Self::one(self.curve), |acc, i| {
-            let squared = acc.sqr();
+    ///
+    /// # Errors
+    ///
+    /// Propagates [`Error::Truncation`] from multiplication (unreachable).
+    pub fn pow(self, exp: &[u64; LIMBS], num_bits: usize) -> Result<Self, Error> {
+        (0..num_bits).rev().try_fold(Self::one(self.curve), |acc, i| {
+            let squared = acc.sqr()?;
             let limb_idx = i / 64;
             let bit_idx = i % 64;
             if (exp[limb_idx] >> bit_idx) & 1 == 1 {
-                squared * self
+                squared.try_mul(self)
             } else {
-                squared
+                Ok(squared)
             }
         })
     }
 
     /// Computes the fifth root: `self^((4p-3)/5) mod p`.
-    #[must_use]
-    pub fn fifth_root(self) -> Self {
+    ///
+    /// # Errors
+    ///
+    /// Propagates [`Error::Truncation`] from exponentiation (unreachable).
+    pub fn fifth_root(self) -> Result<Self, Error> {
         let exp = self.curve.fifth_root_exponent();
         let bits = self.curve.exponent_bits();
         self.pow(&exp, bits)
@@ -213,60 +221,62 @@ impl FieldElement {
     }
 }
 
-impl ops::Add for FieldElement {
-    type Output = Self;
-
+impl FieldElement {
     /// Modular addition: `self + rhs mod p`.
-    fn add(self, rhs: Self) -> Self {
+    ///
+    /// # Errors
+    ///
+    /// Propagates [`Error::Truncation`] from limb subtraction (unreachable).
+    pub fn try_add(self, rhs: Self) -> Result<Self, Error> {
         debug_assert_eq!(self.curve, rhs.curve);
         let modulus = self.curve.modulus();
         let (sum, carry) = add_limbs(&self.limbs, &rhs.limbs);
         let result = if carry || gte_modulus(&sum, &modulus) {
-            sub_limbs(&sum, &modulus).0
+            sub_limbs(&sum, &modulus)?.0
         } else {
             sum
         };
-        Self {
+        Ok(Self {
             limbs: result,
             curve: self.curve,
-        }
+        })
     }
-}
-
-impl ops::Sub for FieldElement {
-    type Output = Self;
 
     /// Modular subtraction: `self - rhs mod p`.
-    fn sub(self, rhs: Self) -> Self {
+    ///
+    /// # Errors
+    ///
+    /// Propagates [`Error::Truncation`] from limb subtraction (unreachable).
+    pub fn try_sub(self, rhs: Self) -> Result<Self, Error> {
         debug_assert_eq!(self.curve, rhs.curve);
         let modulus = self.curve.modulus();
-        let (diff, borrow) = sub_limbs(&self.limbs, &rhs.limbs);
+        let (diff, borrow) = sub_limbs(&self.limbs, &rhs.limbs)?;
         let result = if borrow {
             add_limbs(&diff, &modulus).0
         } else {
             diff
         };
-        Self {
+        Ok(Self {
             limbs: result,
             curve: self.curve,
-        }
+        })
     }
-}
-
-impl ops::Mul for FieldElement {
-    type Output = Self;
 
     /// Modular multiplication: `self * rhs mod p`.
     ///
     /// Uses schoolbook multiplication followed by shift-and-subtract reduction.
-    fn mul(self, rhs: Self) -> Self {
+    ///
+    /// # Errors
+    ///
+    /// Propagates [`Error::Truncation`] from wide reduction (unreachable).
+    pub fn try_mul(self, rhs: Self) -> Result<Self, Error> {
         debug_assert_eq!(self.curve, rhs.curve);
         let wide = mul_wide(&self.limbs, &rhs.limbs);
-        let reduced = reduce_wide(&wide, &self.curve.modulus());
-        Self {
+        let reduced = reduce_wide(&wide, &self.curve.modulus())?;
+        Ok(Self {
             limbs: reduced,
             curve: self.curve,
-        }
+        })
     }
 }
 
@@ -288,30 +298,46 @@ fn add_limbs(a: &[u64; LIMBS], b: &[u64; LIMBS]) -> ([u64; LIMBS], bool) {
 }
 
 /// Subtracts two 4-limb numbers, returning (result, borrow).
-#[allow(clippy::cast_possible_truncation)]
-fn sub_limbs(a: &[u64; LIMBS], b: &[u64; LIMBS]) -> ([u64; LIMBS], bool) {
-    let mut result = [0u64; LIMBS];
-    let borrow = a.iter().zip(b.iter()).enumerate().fold(
-        0u128,
-        |borrow, (i, (&ai, &bi))| {
-            let diff = u128::from(ai).wrapping_sub(u128::from(bi)).wrapping_sub(borrow);
-            result[i] = diff as u64;
-            u128::from(diff >> 127 != 0)
-        },
-    );
-    (result, borrow != 0)
+///
+/// Ripple-borrow subtraction, unrolled across the four little-endian
+/// limbs.  Each `bo*` is the borrow out of the limb below it (0 or 1),
+/// detected via bit 127 of the wrapping `u128` difference.  Each limb is
+/// masked to 64 bits before the checked `u64` conversion, so the
+/// `TryFrom` is total in practice.
+///
+/// # Errors
+///
+/// Returns [`Error::Truncation`] if a masked limb fails to fit in `u64`
+/// (unreachable; the mask guarantees the value is in range).
+fn sub_limbs(a: &[u64; LIMBS], b: &[u64; LIMBS]) -> Result<([u64; LIMBS], bool), Error> {
+    let d0 = u128::from(a[0]).wrapping_sub(u128::from(b[0]));
+    let bo0 = u128::from(d0 >> 127 != 0);
+    let d1 = u128::from(a[1]).wrapping_sub(u128::from(b[1])).wrapping_sub(bo0);
+    let bo1 = u128::from(d1 >> 127 != 0);
+    let d2 = u128::from(a[2]).wrapping_sub(u128::from(b[2])).wrapping_sub(bo1);
+    let bo2 = u128::from(d2 >> 127 != 0);
+    let d3 = u128::from(a[3]).wrapping_sub(u128::from(b[3])).wrapping_sub(bo2);
+    let mask = u128::from(u64::MAX);
+    let l0 = u64::try_from(d0 & mask).map_err(|_| Error::Truncation)?;
+    let l1 = u64::try_from(d1 & mask).map_err(|_| Error::Truncation)?;
+    let l2 = u64::try_from(d2 & mask).map_err(|_| Error::Truncation)?;
+    let l3 = u64::try_from(d3 & mask).map_err(|_| Error::Truncation)?;
+    Ok(([l0, l1, l2, l3], d3 >> 127 != 0))
 }
 
 /// Returns `true` if `a >= modulus`.
+///
+/// Lexicographic comparison from the most-significant limb down.
 fn gte_modulus(a: &[u64; LIMBS], modulus: &[u64; LIMBS]) -> bool {
-    a.iter()
-        .zip(modulus.iter())
-        .rev()
-        .fold(core::cmp::Ordering::Equal, |ord, (&ai, &mi)| match ord {
-            core::cmp::Ordering::Equal => ai.cmp(&mi),
-            other => other,
-        })
-        != core::cmp::Ordering::Less
+    if a[3] != modulus[3] {
+        a[3] > modulus[3]
+    } else if a[2] != modulus[2] {
+        a[2] > modulus[2]
+    } else if a[1] != modulus[1] {
+        a[1] > modulus[1]
+    } else {
+        a[0] >= modulus[0]
+    }
 }
 
 /// Schoolbook multiplication producing an 8-limb (512-bit) result.
@@ -331,40 +357,60 @@ fn mul_wide(a: &[u64; LIMBS], b: &[u64; LIMBS]) -> [u64; LIMBS * 2] {
 }
 
 /// Reduces a 512-bit product modulo `p` via shift-and-subtract.
-fn reduce_wide(wide: &[u64; LIMBS * 2], modulus: &[u64; LIMBS]) -> [u64; LIMBS] {
-    let total_bits = LIMBS * 2 * 64;
-    (0..total_bits).rev().fold([0u64; LIMBS], |acc, bit| {
-        // Shift accumulator left by 1
+///
+/// Processes the wide product one bit at a time from the most
+/// significant (bit 511) down to bit 0, shifting the accumulator left,
+/// bringing in the next bit, and conditionally subtracting the modulus.
+fn reduce_wide(
+    wide: &[u64; LIMBS * 2],
+    modulus: &[u64; LIMBS],
+) -> Result<[u64; LIMBS], Error> {
+    reduce_wide_rec(wide, modulus, LIMBS * 2 * 64, [0u64; LIMBS])
+}
+
+/// Tail-recursive core of [`reduce_wide`].
+///
+/// `remaining` counts the bits still to process; the bit handled in this
+/// step is `remaining - 1`, so the recursion walks bits 511 → 0.
+///
+/// # Errors
+///
+/// Propagates [`Error::Truncation`] from limb subtraction (unreachable).
+fn reduce_wide_rec(
+    wide: &[u64; LIMBS * 2],
+    modulus: &[u64; LIMBS],
+    remaining: usize,
+    acc: [u64; LIMBS],
+) -> Result<[u64; LIMBS], Error> {
+    if remaining == 0 {
+        Ok(acc)
+    } else {
+        let bit = remaining - 1;
         let shifted = shift_left_one(&acc);
-        // Bring in the current bit from the wide product
         let limb_idx = bit / 64;
         let bit_idx = bit % 64;
         let incoming = (wide[limb_idx] >> bit_idx) & 1;
-        let with_bit = [
-            shifted[0] | incoming,
-            shifted[1],
-            shifted[2],
-            shifted[3],
-        ];
-        // Conditional subtract
-        if gte_modulus(&with_bit, modulus) {
-            sub_limbs(&with_bit, modulus).0
+        let with_bit = [shifted[0] | incoming, shifted[1], shifted[2], shifted[3]];
+        let next = if gte_modulus(&with_bit, modulus) {
+            sub_limbs(&with_bit, modulus)?.0
         } else {
             with_bit
-        }
-    })
+        };
+        reduce_wide_rec(wide, modulus, bit, next)
+    }
 }
 
 /// Shifts a 4-limb number left by one bit.
+///
+/// Each limb takes its own `<< 1` plus the top bit carried up from the
+/// limb below.  The bit shifted out of the top limb is discarded.
 fn shift_left_one(a: &[u64; LIMBS]) -> [u64; LIMBS] {
-    let mut result = [0u64; LIMBS];
-    (0..LIMBS).rev().for_each(|i| {
-        result[i] = a[i] << 1;
-        if i > 0 {
-            result[i] |= a[i - 1] >> 63;
-        }
-    });
-    result
+    [
+        a[0] << 1,
+        (a[1] << 1) | (a[0] >> 63),
+        (a[2] << 1) | (a[1] >> 63),
+        (a[3] << 1) | (a[2] >> 63),
+    ]
 }
 
 #[cfg(test)]
@@ -372,49 +418,55 @@ mod tests {
     use super::*;
 
     #[test]
-    fn zero_add_identity() {
+    fn zero_add_identity() -> Result<(), Error> {
         let a = FieldElement::from_u64(42, Curve::Pallas);
         let z = FieldElement::zero(Curve::Pallas);
-        assert_eq!(a + z, a);
-        assert_eq!(z + a, a);
+        assert_eq!(a.try_add(z)?, a);
+        assert_eq!(z.try_add(a)?, a);
+        Ok(())
     }
 
     #[test]
-    fn one_mul_identity() {
+    fn one_mul_identity() -> Result<(), Error> {
         let a = FieldElement::from_u64(12345, Curve::Pallas);
         let one = FieldElement::one(Curve::Pallas);
-        assert_eq!(a * one, a);
-        assert_eq!(one * a, a);
+        assert_eq!(a.try_mul(one)?, a);
+        assert_eq!(one.try_mul(a)?, a);
+        Ok(())
     }
 
     #[test]
-    fn add_sub_roundtrip() {
+    fn add_sub_roundtrip() -> Result<(), Error> {
         let a = FieldElement::from_u64(100, Curve::Pallas);
         let b = FieldElement::from_u64(200, Curve::Pallas);
-        assert_eq!((a + b) - b, a);
+        assert_eq!((a.try_add(b)?).try_sub(b)?, a);
+        Ok(())
     }
 
     #[test]
-    fn sqr_equals_mul_self() {
+    fn sqr_equals_mul_self() -> Result<(), Error> {
         let a = FieldElement::from_u64(9999, Curve::Pallas);
-        assert_eq!(a.sqr(), a * a);
+        assert_eq!(a.sqr()?, a.try_mul(a)?);
+        Ok(())
     }
 
     #[test]
-    fn fifth_root_roundtrip() {
+    fn fifth_root_roundtrip() -> Result<(), Error> {
         // x^5 should be the inverse of fifth_root for nonzero elements.
         let x = FieldElement::from_u64(7, Curve::Pallas);
-        let r = x.fifth_root();
-        let r5 = r * r * r * r * r;
+        let r = x.fifth_root()?;
+        let r5 = r.try_mul(r)?.try_mul(r)?.try_mul(r)?.try_mul(r)?;
         assert_eq!(r5, x);
+        Ok(())
     }
 
     #[test]
-    fn fifth_root_roundtrip_vesta() {
+    fn fifth_root_roundtrip_vesta() -> Result<(), Error> {
         let x = FieldElement::from_u64(13, Curve::Vesta);
-        let r = x.fifth_root();
-        let r5 = r * r * r * r * r;
+        let r = x.fifth_root()?;
+        let r5 = r.try_mul(r)?.try_mul(r)?.try_mul(r)?.try_mul(r)?;
         assert_eq!(r5, x);
+        Ok(())
     }
 
     #[test]
