@@ -171,13 +171,42 @@ private theorem add_carry_concat (a0 a1 a2 a3 b0 b1 b2 b3 : BitVec 64) :
     = (a3 ++ a2 ++ a1 ++ a0) + (b3 ++ b2 ++ b1 ++ b0) := by
   bv_decide (config := { timeout := 60 })
 
-/-- `add_limbs a b` returns the 256-bit wrapping sum (and a carry flag).
-    Companion to `sub_limbs_spec`: the four limb additions form a
-    ripple-carry chain via `u128`; the masked low-64 casts reassemble into
-    the 256-bit sum. -/
+/-- The top carry-out of the ripple chain (`s₃ >> 64`) is nonzero exactly when
+    the full 256-bit addition overflows (`msb` of the 257-bit sum).  Fresh-limb
+    bit-vector identity (`bv_decide`); stated over fresh `BitVec 64` to dodge
+    `bv_decide`'s sensitivity to the array-access atoms `(↑a)[k]!.bv`. -/
+private theorem add_carry_bit (a0 a1 a2 a3 b0 b1 b2 b3 : BitVec 64) :
+    ¬((BitVec.setWidth 128 a3 + BitVec.setWidth 128 b3 +
+            (BitVec.setWidth 128 a2 + BitVec.setWidth 128 b2 +
+                (BitVec.setWidth 128 a1 + BitVec.setWidth 128 b1 +
+                    (BitVec.setWidth 128 a0 + BitVec.setWidth 128 b0) >>> 64) >>> 64) >>> 64).ushiftRight
+          64 = 0#128)
+      ↔ (BitVec.setWidth 257 (a3 ++ a2 ++ a1 ++ a0) +
+          BitVec.setWidth 257 (b3 ++ b2 ++ b1 ++ b0)).msb = true := by
+  bv_decide (config := { timeout := 60 })
+
+/-- The unsigned-add overflow flag is exactly the `2^w ≤ a + b` predicate on
+    the underlying naturals.  Bridges `BitVec.uaddOverflow` (bit-blastable, so
+    `bv_decide` can reason about it) to the `decide (2^256 ≤ …)` carry spec. -/
+private theorem uaddOverflow_eq_decide (x y : BitVec 256) :
+    x.uaddOverflow y = decide (2 ^ 256 ≤ x.toNat + y.toNat) := by
+  have hx : (BitVec.setWidth 257 x).toNat = x.toNat := BitVec.toNat_setWidth_of_le (by norm_num)
+  have hy : (BitVec.setWidth 257 y).toNat = y.toNat := BitVec.toNat_setWidth_of_le (by norm_num)
+  have hlt : (BitVec.setWidth 257 x).toNat + (BitVec.setWidth 257 y).toNat < 2 ^ 257 := by
+    rw [hx, hy]
+    calc x.toNat + y.toNat < 2 ^ 256 + 2 ^ 256 := Nat.add_lt_add x.isLt y.isLt
+      _ = 2 ^ 257 := by rw [← two_mul, mul_comm, ← pow_succ]
+  rw [BitVec.uaddOverflow_eq, BitVec.msb_eq_decide, BitVec.toNat_add_of_lt hlt, hx, hy]
+
+/-- `add_limbs a b` returns the 256-bit wrapping sum together with a carry
+    flag that is exactly the overflow bit `2^256 ≤ val a + val b`.  Companion
+    to `sub_limbs_spec`: the four limb additions form a ripple-carry chain via
+    `u128`; the masked low-64 casts reassemble into the 256-bit sum and the top
+    `>> 64` is the carry-out. -/
 @[step] theorem add_limbs_spec (a b : Array Std.U64 4#usize) :
     add_limbs a b ⦃ r => ∃ out carry,
-      r = core.result.Result.Ok (out, carry) ∧ bv256 out = bv256 a + bv256 b ⦄ := by
+      r = core.result.Result.Ok (out, carry) ∧ bv256 out = bv256 a + bv256 b ∧
+      carry = decide (2 ^ 256 ≤ (bv256 a).toNat + (bv256 b).toNat) ⦄ := by
   unfold add_limbs
   simp only [lift]
   step*
@@ -185,15 +214,21 @@ private theorem add_carry_concat (a0 a1 a2 a3 b0 b1 b2 b3 : BitVec 64) :
     core.result.Result.map_err,
     core.result.Result.Insts.CoreOpsTry_traitTryTResultInfallibleE.branch,
     mask_val_le, if_true, bind_tc_ok]
-  refine ⟨_, _, rfl, ?_⟩
-  simp only [bv256, Array.make, List.getElem!_cons_zero, List.getElem!_cons_succ,
-    Std.U64.bv, Std.U128.bv, Std.UScalar.cast_bv_eq,
-    core.convert.num.FromU128U64.from_bv_eq, core.num.U128.wrapping_add_bv_eq,
-    Std.UScalar.bv_and, core.num.U64.MAX, Std.U64.ofNat_bv,
-    Std.U64.rMax, Std.UScalarTy.U64_numBits_eq,
-    i9_post2, i15_post2, i21_post2,
-    i_post, i2_post, i4_post, i6_post, i10_post, i12_post, i16_post, i18_post]
-  exact add_carry_concat _ _ _ _ _ _ _ _
+  refine ⟨_, _, rfl, ?_, ?_⟩
+  · simp only [bv256, Array.make, List.getElem!_cons_zero, List.getElem!_cons_succ,
+      Std.U64.bv, Std.U128.bv, Std.UScalar.cast_bv_eq,
+      core.convert.num.FromU128U64.from_bv_eq, core.num.U128.wrapping_add_bv_eq,
+      Std.UScalar.bv_and, core.num.U64.MAX, Std.U64.ofNat_bv,
+      Std.U64.rMax, Std.UScalarTy.U64_numBits_eq,
+      i9_post2, i15_post2, i21_post2,
+      i_post, i2_post, i4_post, i6_post, i10_post, i12_post, i16_post, i18_post]
+    exact add_carry_concat _ _ _ _ _ _ _ _
+  · rw [← uaddOverflow_eq_decide, BitVec.uaddOverflow_eq, Bool.eq_iff_iff]
+    simp only [bv256, core.num.U128.wrapping_add_bv_eq, core.convert.num.FromU128U64.from_bv_eq,
+      i9_post2, i15_post2, i21_post2, i_post, i2_post, i4_post, i6_post, i10_post, i12_post,
+      i16_post, i18_post, Std.U64.bv, Std.U128.bv, bne_iff_ne, ne_eq, Std.U128.eq_equiv_bv_eq,
+      show (0#u128).bv = 0#128 from rfl, show ((64#i32).toNat) = 64 from rfl]
+    exact add_carry_bit _ _ _ _ _ _ _ _
 
 /-- Injecting the incoming bit into the low limb is an `or` against the
     zero-extended bit (the high limbs are unaffected). -/

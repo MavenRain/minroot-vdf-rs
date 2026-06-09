@@ -93,13 +93,35 @@ Keep `maxHeartbeats 1000000`. Never `omega`/`linarith`/`nlinarith`/`partial_fixp
 
 ## (5b) `add_limbs` [DONE] — and the extraction-widening workflow
 
-`add_limbs` is the additive twin of `sub_limbs`; `add_limbs_spec` (post
-`bv256 out = bv256 a + bv256 b`, carry left existential like `sub`'s borrow)
-proves by the SAME skeleton: `unfold; simp only [lift]; step*` → first `simp`
-(try_from/map_err/branch/`mask_val_le`) → `refine ⟨_, _, rfl, ?_⟩` → second
-`simp` → `exact add_carry_concat _ _ _ _ _ _ _ _`. The bv lemma
-`add_carry_concat` is `sub_borrow_concat` with `+`/`>>> 64` (carry) replacing
-`-`/`if … >>> 127` (borrow); `bv_decide (timeout := 60)`.
+`add_limbs` is the additive twin of `sub_limbs`; `add_limbs_spec` is the FULL
+ADDER: post `bv256 out = bv256 a + bv256 b ∧ carry = decide (2^256 ≤
+(bv256 a).toNat + (bv256 b).toNat)`. Skeleton: `unfold; simp only [lift]; step*`
+→ first `simp` (try_from/map_err/branch/`mask_val_le`) → `refine ⟨_, _, rfl, ?_, ?_⟩`.
+- Output conjunct: second `simp` → `exact add_carry_concat _ _ _ _ _ _ _ _`. The bv
+  lemma `add_carry_concat` is `sub_borrow_concat` with `+`/`>>> 64` (carry) replacing
+  `-`/`if … >>> 127` (borrow); `bv_decide (timeout := 60)`.
+- Carry conjunct (the hard one — Aeneas returns the carry as a U128 `bne`):
+  `rw [← uaddOverflow_eq_decide, BitVec.uaddOverflow_eq, Bool.eq_iff_iff]` then
+  `simp only [bv256, wrapping_add_bv_eq, from_bv_eq, i9_post2, i15_post2, i21_post2,
+  i_post…i18_post, Std.U64.bv, Std.U128.bv, bne_iff_ne, ne_eq, Std.U128.eq_equiv_bv_eq,
+  show (0#u128).bv = 0#128 from rfl, show ((64#i32).toNat) = 64 from rfl]` →
+  `exact add_carry_bit _ _ _ _ _ _ _ _`. Pieces that make it work:
+  - `uaddOverflow_eq_decide (x y : BitVec 256) : x.uaddOverflow y = decide (2^256 ≤
+    x.toNat + y.toNat)` — bridge proven via `uaddOverflow_eq` + `msb_eq_decide` +
+    `toNat_setWidth_of_le` + `toNat_add_of_lt` (the `2^256+2^256=2^257` step =
+    `by rw [← two_mul, mul_comm, ← pow_succ]`).
+  - `Bool.eq_iff_iff` turns the `Bool = Bool` goal into a Prop `↔` so `bne_iff_ne`
+    fires; the Aeneas U128 `BEq` is `beq a b := a.bv = b.bv`, so `eq_equiv_bv_eq`
+    + `(0#u128).bv = 0#128` reduce `(w#uscalar != 0#u128)` to a BitVec `≠`.
+  - `BitVec.uaddOverflow_eq` is MANDATORY: this `bv_decide` does NOT bit-blast
+    `BitVec.uaddOverflow` directly (abstracts it + its args) — rewrite it to the
+    `.msb` form first.
+  - CRITICAL: the post-simp goal is a clean pure-bv `↔`, but `bv_decide` STILL
+    abstracts it because the atoms are array accesses `(↑a)[k]!.bv` used in mixed
+    128-bit `setWidth`/256-bit `++` shapes. Same fix as `add_carry_concat`: state a
+    FRESH-LIMB lemma `add_carry_bit (a0..b3 : BitVec 64)` (carry chain `.ushiftRight 64
+    = 0#128 ↔ (setWidth 257 (a3++…) + setWidth 257 (b3++…)).msb = true`, `bv_decide`)
+    and `exact` it. Don't run `bv_decide` on the array-atom goal directly.
 
 TWO GOTCHAS that gate this:
 - **Iterators don't extract to provable code.** The original `add_limbs`/`mul_wide`
@@ -127,6 +149,9 @@ minroot_core.llbc`. It REGENERATES `Funs/Types/*_Template` but NOT the hand-edit
 re-extraction** — a running server holds the stale `Funs.olean` and lowercase
 identifiers like `add_limbs` will autobind as `Sort u` implicits.
 
-NEXT: `add_limbs` carry characterization (for `try_add`), then `mul_wide` (rewrite
-4×4 schoolbook iterator-free first; `bv_decide` won't scale to a 512-bit multiply →
-needs Nat schoolbook decomposition), then `try_mul`/`try_add`/`try_sub` compositions.
+NEXT: `try_add`/`try_sub` (extract `--start-from crate::field::try_add try_sub`; they
+compose the now-verified `add_limbs`/`sub_limbs`/`gte_modulus`; the full-adder carry
+makes the conditional-subtract reasoning available; need to model the `FieldElement`
+struct / `Curve::modulus` externals). Then `mul_wide` (rewrite 4×4 schoolbook
+iterator-free first; `bv_decide` won't scale to a 512-bit multiply → needs Nat
+schoolbook decomposition), then `try_mul`.
