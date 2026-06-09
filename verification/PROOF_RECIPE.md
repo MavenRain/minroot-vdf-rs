@@ -90,3 +90,43 @@ Pallas/Vesta `p ≈ 2^254`, well under `2^255`.
 ORDER: (0) model 4 combinators [DONE] → (2) `Spec.lean` defs → (3) `shift_left_one` →
 (4) `gte_modulus` → (5) `sub_limbs` → (6) `reduce_wide_rec` → (7) `reduce_wide`.
 Keep `maxHeartbeats 1000000`. Never `omega`/`linarith`/`nlinarith`/`partial_fixpoint_induct`/`all_goals`.
+
+## (5b) `add_limbs` [DONE] — and the extraction-widening workflow
+
+`add_limbs` is the additive twin of `sub_limbs`; `add_limbs_spec` (post
+`bv256 out = bv256 a + bv256 b`, carry left existential like `sub`'s borrow)
+proves by the SAME skeleton: `unfold; simp only [lift]; step*` → first `simp`
+(try_from/map_err/branch/`mask_val_le`) → `refine ⟨_, _, rfl, ?_⟩` → second
+`simp` → `exact add_carry_concat _ _ _ _ _ _ _ _`. The bv lemma
+`add_carry_concat` is `sub_borrow_concat` with `+`/`>>> 64` (carry) replacing
+`-`/`if … >>> 127` (borrow); `bv_decide (timeout := 60)`.
+
+TWO GOTCHAS that gate this:
+- **Iterators don't extract to provable code.** The original `add_limbs`/`mul_wide`
+  used `.iter().zip().enumerate().fold(...)` / `.for_each(...)`. Aeneas has no
+  Lean model for `Iterator::{fold,for_each,zip}` (it warns + emits OPAQUE calls →
+  no equation → unprovable). FIX: rewrite the Rust iterator-free in the unrolled
+  /explicit-recursion style of `sub_limbs`/`reduce_wide_rec` (CLAUDE.md permits
+  recursion as the alt to combinators). Behavior-preserving; `cargo test` still 28/28.
+- **Use `wrapping_add`, not `+`.** Plain `u128 +` extracts as a FALLIBLE add, so
+  `step*` leaves three `case hmax : ↑i_ + ↑i_ ≤ U128.max` overflow side-goals AND
+  gives only `.val` posts (no `.bv`). `.wrapping_add(...)` (like `sub`'s
+  `wrapping_sub`) is TOTAL: zero side-goals, and `core.num.U128.wrapping_add_bv_eq`
+  (`@[simp,bvify]`) gives the `.bv`. Columns are `< 2^65` so the wrap never fires —
+  `>> 64` still recovers the exact carry. (If forced to keep `+`: discharge each
+  `hmax` with `scalar_tac`, then bridge each `s_i.bv` from its `.val` post.)
+
+RE-EXTRACTION (widening past the `reduce_wide` subtree): the prior `.llbc` was
+scoped via `charon cargo --preset=aeneas --start-from crate::field::reduce_wide`.
+Add targets, e.g. `… --start-from crate::field::add_limbs`, `--dest-file …/minroot_core.llbc`
+(charon at `aeneas/charon/bin`; `--preset=aeneas` is MANDATORY or aeneas rejects the
+llbc). Then `aeneas -backend lean -split-files -subdir MinrootCore/Code -dest verification
+minroot_core.llbc`. It REGENERATES `Funs/Types/*_Template` but NOT the hand-edited
+`FunsExternal/TypesExternal`; the `reduce_wide` subtree comes out byte-identical
+(deterministic), so existing proofs survive. **Restart the LSP (`lean_build`) after
+re-extraction** — a running server holds the stale `Funs.olean` and lowercase
+identifiers like `add_limbs` will autobind as `Sort u` implicits.
+
+NEXT: `add_limbs` carry characterization (for `try_add`), then `mul_wide` (rewrite
+4×4 schoolbook iterator-free first; `bv_decide` won't scale to a 512-bit multiply →
+needs Nat schoolbook decomposition), then `try_mul`/`try_add`/`try_sub` compositions.

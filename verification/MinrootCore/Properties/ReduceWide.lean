@@ -150,6 +150,51 @@ private theorem sub_borrow_concat (a0 a1 a2 a3 b0 b1 b2 b3 : BitVec 64) :
     i11_post, i13_post, i17_post, i19_post, i4_post2, i10_post2, i16_post2]
   exact sub_borrow_concat _ _ _ _ _ _ _ _
 
+/-- The ripple-carry `u128` chain reassembles into a single 256-bit addition.
+    Self-contained bit-vector identity over fresh limbs (`bv_decide`); the
+    additive companion to `sub_borrow_concat`. -/
+private theorem add_carry_concat (a0 a1 a2 a3 b0 b1 b2 b3 : BitVec 64) :
+    BitVec.setWidth 64 (BitVec.setWidth 128 a3 + BitVec.setWidth 128 b3 +
+            (BitVec.setWidth 128 a2 + BitVec.setWidth 128 b2 +
+                (BitVec.setWidth 128 a1 + BitVec.setWidth 128 b1 +
+                    (BitVec.setWidth 128 a0 + BitVec.setWidth 128 b0) >>> 64) >>> 64) >>> 64
+          &&& BitVec.setWidth 128 18446744073709551615#64)
+      ++ BitVec.setWidth 64 (BitVec.setWidth 128 a2 + BitVec.setWidth 128 b2 +
+            (BitVec.setWidth 128 a1 + BitVec.setWidth 128 b1 +
+                (BitVec.setWidth 128 a0 + BitVec.setWidth 128 b0) >>> 64) >>> 64
+          &&& BitVec.setWidth 128 18446744073709551615#64)
+      ++ BitVec.setWidth 64 (BitVec.setWidth 128 a1 + BitVec.setWidth 128 b1 +
+            (BitVec.setWidth 128 a0 + BitVec.setWidth 128 b0) >>> 64
+          &&& BitVec.setWidth 128 18446744073709551615#64)
+      ++ BitVec.setWidth 64 (BitVec.setWidth 128 a0 + BitVec.setWidth 128 b0
+          &&& BitVec.setWidth 128 18446744073709551615#64)
+    = (a3 ++ a2 ++ a1 ++ a0) + (b3 ++ b2 ++ b1 ++ b0) := by
+  bv_decide (config := { timeout := 60 })
+
+/-- `add_limbs a b` returns the 256-bit wrapping sum (and a carry flag).
+    Companion to `sub_limbs_spec`: the four limb additions form a
+    ripple-carry chain via `u128`; the masked low-64 casts reassemble into
+    the 256-bit sum. -/
+@[step] theorem add_limbs_spec (a b : Array Std.U64 4#usize) :
+    add_limbs a b ⦃ r => ∃ out carry,
+      r = core.result.Result.Ok (out, carry) ∧ bv256 out = bv256 a + bv256 b ⦄ := by
+  unfold add_limbs
+  simp only [lift]
+  step*
+  simp only [U64.Insts.CoreConvertTryFromU128TryFromIntError.try_from,
+    core.result.Result.map_err,
+    core.result.Result.Insts.CoreOpsTry_traitTryTResultInfallibleE.branch,
+    mask_val_le, if_true, bind_tc_ok]
+  refine ⟨_, _, rfl, ?_⟩
+  simp only [bv256, Array.make, List.getElem!_cons_zero, List.getElem!_cons_succ,
+    Std.U64.bv, Std.U128.bv, Std.UScalar.cast_bv_eq,
+    core.convert.num.FromU128U64.from_bv_eq, core.num.U128.wrapping_add_bv_eq,
+    Std.UScalar.bv_and, core.num.U64.MAX, Std.U64.ofNat_bv,
+    Std.U64.rMax, Std.UScalarTy.U64_numBits_eq,
+    i9_post2, i15_post2, i21_post2,
+    i_post, i2_post, i4_post, i6_post, i10_post, i12_post, i16_post, i18_post]
+  exact add_carry_concat _ _ _ _ _ _ _ _
+
 /-- Injecting the incoming bit into the low limb is an `or` against the
     zero-extended bit (the high limbs are unaffected). -/
 private theorem or_distrib (a0 a1 a2 a3 z : BitVec 64) :

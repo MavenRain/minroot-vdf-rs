@@ -226,11 +226,12 @@ impl FieldElement {
     ///
     /// # Errors
     ///
-    /// Propagates [`Error::Truncation`] from limb subtraction (unreachable).
+    /// Propagates [`Error::Truncation`] from limb addition or subtraction
+    /// (unreachable).
     pub fn try_add(self, rhs: Self) -> Result<Self, Error> {
         debug_assert_eq!(self.curve, rhs.curve);
         let modulus = self.curve.modulus();
-        let (sum, carry) = add_limbs(&self.limbs, &rhs.limbs);
+        let (sum, carry) = add_limbs(&self.limbs, &rhs.limbs)?;
         let result = if carry || gte_modulus(&sum, &modulus) {
             sub_limbs(&sum, &modulus)?.0
         } else {
@@ -252,7 +253,7 @@ impl FieldElement {
         let modulus = self.curve.modulus();
         let (diff, borrow) = sub_limbs(&self.limbs, &rhs.limbs)?;
         let result = if borrow {
-            add_limbs(&diff, &modulus).0
+            add_limbs(&diff, &modulus)?.0
         } else {
             diff
         };
@@ -283,18 +284,29 @@ impl FieldElement {
 // ── Multi-limb arithmetic helpers ──────────────────────────────────
 
 /// Adds two 4-limb numbers, returning (result, carry).
-#[allow(clippy::cast_possible_truncation)]
-fn add_limbs(a: &[u64; LIMBS], b: &[u64; LIMBS]) -> ([u64; LIMBS], bool) {
-    let mut result = [0u64; LIMBS];
-    let carry = a.iter().zip(b.iter()).enumerate().fold(
-        0u128,
-        |carry, (i, (&ai, &bi))| {
-            let sum = u128::from(ai) + u128::from(bi) + carry;
-            result[i] = sum as u64;
-            sum >> 64
-        },
-    );
-    (result, carry != 0)
+///
+/// Ripple-carry addition, unrolled across the four little-endian limbs.
+/// Each `s*` is the `u128` column sum (two 64-bit limbs plus the carry-in
+/// `s_{i-1} >> 64`, which is 0 or 1), computed with `wrapping_add`; every
+/// column stays within `2^65`, so the wrap never triggers and `>> 64`
+/// recovers the exact carry.  Each limb is masked to 64 bits before the
+/// checked `u64` conversion, so the `TryFrom` is total in practice.
+///
+/// # Errors
+///
+/// Returns [`Error::Truncation`] if a masked limb fails to fit in `u64`
+/// (unreachable; the mask guarantees the value is in range).
+fn add_limbs(a: &[u64; LIMBS], b: &[u64; LIMBS]) -> Result<([u64; LIMBS], bool), Error> {
+    let s0 = u128::from(a[0]).wrapping_add(u128::from(b[0]));
+    let s1 = u128::from(a[1]).wrapping_add(u128::from(b[1])).wrapping_add(s0 >> 64);
+    let s2 = u128::from(a[2]).wrapping_add(u128::from(b[2])).wrapping_add(s1 >> 64);
+    let s3 = u128::from(a[3]).wrapping_add(u128::from(b[3])).wrapping_add(s2 >> 64);
+    let mask = u128::from(u64::MAX);
+    let l0 = u64::try_from(s0 & mask).map_err(|_| Error::Truncation)?;
+    let l1 = u64::try_from(s1 & mask).map_err(|_| Error::Truncation)?;
+    let l2 = u64::try_from(s2 & mask).map_err(|_| Error::Truncation)?;
+    let l3 = u64::try_from(s3 & mask).map_err(|_| Error::Truncation)?;
+    Ok(([l0, l1, l2, l3], s3 >> 64 != 0))
 }
 
 /// Subtracts two 4-limb numbers, returning (result, borrow).

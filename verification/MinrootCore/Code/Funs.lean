@@ -20,8 +20,187 @@ namespace minroot_core
     Source: 'crates/minroot-core/src/field.rs', lines 15:0-15:23 -/
 @[global_simps, irreducible] def field.LIMBS : Std.Usize := 4#usize
 
+/-- [minroot_core::field::add_limbs::{core::ops::function::FnOnce<(core::num::error::TryFromIntError), minroot_core::error::Error> for minroot_core::field::add_limbs::closure#3}::call_once]:
+    Source: 'crates/minroot-core/src/field.rs', lines 308:46-308:67 -/
+def
+  field.add_limbs.closure_3.Insts.CoreOpsFunctionFnOnceTupleTryFromIntErrorError.call_once
+  (c : field.add_limbs.closure_3)
+  (tupled_args : core.num.error.TryFromIntError) :
+  Result error.Error
+  := do
+  ok error.Error.Truncation
+
+/-- Trait implementation: [minroot_core::field::add_limbs::{core::ops::function::FnOnce<(core::num::error::TryFromIntError), minroot_core::error::Error> for minroot_core::field::add_limbs::closure#3}]
+    Source: 'crates/minroot-core/src/field.rs', lines 308:46-308:67 -/
+@[reducible]
+def
+  field.add_limbs.closure_3.Insts.CoreOpsFunctionFnOnceTupleTryFromIntErrorError
+  : core.ops.function.FnOnce field.add_limbs.closure_3
+  core.num.error.TryFromIntError error.Error := {
+  call_once :=
+    field.add_limbs.closure_3.Insts.CoreOpsFunctionFnOnceTupleTryFromIntErrorError.call_once
+}
+
+/-- [minroot_core::field::add_limbs::{core::ops::function::FnOnce<(core::num::error::TryFromIntError), minroot_core::error::Error> for minroot_core::field::add_limbs::closure#2}::call_once]:
+    Source: 'crates/minroot-core/src/field.rs', lines 307:46-307:67 -/
+def
+  field.add_limbs.closure_2.Insts.CoreOpsFunctionFnOnceTupleTryFromIntErrorError.call_once
+  (c : field.add_limbs.closure_2)
+  (tupled_args : core.num.error.TryFromIntError) :
+  Result error.Error
+  := do
+  ok error.Error.Truncation
+
+/-- Trait implementation: [minroot_core::field::add_limbs::{core::ops::function::FnOnce<(core::num::error::TryFromIntError), minroot_core::error::Error> for minroot_core::field::add_limbs::closure#2}]
+    Source: 'crates/minroot-core/src/field.rs', lines 307:46-307:67 -/
+@[reducible]
+def
+  field.add_limbs.closure_2.Insts.CoreOpsFunctionFnOnceTupleTryFromIntErrorError
+  : core.ops.function.FnOnce field.add_limbs.closure_2
+  core.num.error.TryFromIntError error.Error := {
+  call_once :=
+    field.add_limbs.closure_2.Insts.CoreOpsFunctionFnOnceTupleTryFromIntErrorError.call_once
+}
+
+/-- [minroot_core::field::add_limbs::{core::ops::function::FnOnce<(core::num::error::TryFromIntError), minroot_core::error::Error> for minroot_core::field::add_limbs::closure#1}::call_once]:
+    Source: 'crates/minroot-core/src/field.rs', lines 306:46-306:67 -/
+def
+  field.add_limbs.closure_1.Insts.CoreOpsFunctionFnOnceTupleTryFromIntErrorError.call_once
+  (c : field.add_limbs.closure_1)
+  (tupled_args : core.num.error.TryFromIntError) :
+  Result error.Error
+  := do
+  ok error.Error.Truncation
+
+/-- Trait implementation: [minroot_core::field::add_limbs::{core::ops::function::FnOnce<(core::num::error::TryFromIntError), minroot_core::error::Error> for minroot_core::field::add_limbs::closure#1}]
+    Source: 'crates/minroot-core/src/field.rs', lines 306:46-306:67 -/
+@[reducible]
+def
+  field.add_limbs.closure_1.Insts.CoreOpsFunctionFnOnceTupleTryFromIntErrorError
+  : core.ops.function.FnOnce field.add_limbs.closure_1
+  core.num.error.TryFromIntError error.Error := {
+  call_once :=
+    field.add_limbs.closure_1.Insts.CoreOpsFunctionFnOnceTupleTryFromIntErrorError.call_once
+}
+
+/-- [minroot_core::field::add_limbs::{core::ops::function::FnOnce<(core::num::error::TryFromIntError), minroot_core::error::Error> for minroot_core::field::add_limbs::closure}::call_once]:
+    Source: 'crates/minroot-core/src/field.rs', lines 305:46-305:67 -/
+def
+  field.add_limbs.closure.Insts.CoreOpsFunctionFnOnceTupleTryFromIntErrorError.call_once
+  (c : field.add_limbs.closure) (tupled_args : core.num.error.TryFromIntError)
+  :
+  Result error.Error
+  := do
+  ok error.Error.Truncation
+
+/-- Trait implementation: [minroot_core::field::add_limbs::{core::ops::function::FnOnce<(core::num::error::TryFromIntError), minroot_core::error::Error> for minroot_core::field::add_limbs::closure}]
+    Source: 'crates/minroot-core/src/field.rs', lines 305:46-305:67 -/
+@[reducible]
+def
+  field.add_limbs.closure.Insts.CoreOpsFunctionFnOnceTupleTryFromIntErrorError
+  : core.ops.function.FnOnce field.add_limbs.closure
+  core.num.error.TryFromIntError error.Error := {
+  call_once :=
+    field.add_limbs.closure.Insts.CoreOpsFunctionFnOnceTupleTryFromIntErrorError.call_once
+}
+
+/-- [minroot_core::field::add_limbs]:
+    Source: 'crates/minroot-core/src/field.rs', lines 299:0-310:1 -/
+def field.add_limbs
+  (a : Array Std.U64 4#usize) (b : Array Std.U64 4#usize) :
+  Result (core.result.Result ((Array Std.U64 4#usize) × Bool) error.Error)
+  := do
+  let i ← Array.index_usize a 0#usize
+  let i1 ← lift (core.convert.num.FromU128U64.from i)
+  let i2 ← Array.index_usize b 0#usize
+  let i3 ← lift (core.convert.num.FromU128U64.from i2)
+  let s0 ← lift (core.num.U128.wrapping_add i1 i3)
+  let i4 ← Array.index_usize a 1#usize
+  let i5 ← lift (core.convert.num.FromU128U64.from i4)
+  let i6 ← Array.index_usize b 1#usize
+  let i7 ← lift (core.convert.num.FromU128U64.from i6)
+  let i8 ← lift (core.num.U128.wrapping_add i5 i7)
+  let i9 ← s0 >>> 64#i32
+  let s1 ← lift (core.num.U128.wrapping_add i8 i9)
+  let i10 ← Array.index_usize a 2#usize
+  let i11 ← lift (core.convert.num.FromU128U64.from i10)
+  let i12 ← Array.index_usize b 2#usize
+  let i13 ← lift (core.convert.num.FromU128U64.from i12)
+  let i14 ← lift (core.num.U128.wrapping_add i11 i13)
+  let i15 ← s1 >>> 64#i32
+  let s2 ← lift (core.num.U128.wrapping_add i14 i15)
+  let i16 ← Array.index_usize a 3#usize
+  let i17 ← lift (core.convert.num.FromU128U64.from i16)
+  let i18 ← Array.index_usize b 3#usize
+  let i19 ← lift (core.convert.num.FromU128U64.from i18)
+  let i20 ← lift (core.num.U128.wrapping_add i17 i19)
+  let i21 ← s2 >>> 64#i32
+  let s3 ← lift (core.num.U128.wrapping_add i20 i21)
+  let mask ← lift (core.convert.num.FromU128U64.from core.num.U64.MAX)
+  let i22 ← lift (s0 &&& mask)
+  let r ← U64.Insts.CoreConvertTryFromU128TryFromIntError.try_from i22
+  let r1 ←
+    core.result.Result.map_err
+      field.add_limbs.closure.Insts.CoreOpsFunctionFnOnceTupleTryFromIntErrorError
+      r ()
+  let cf ←
+    core.result.Result.Insts.CoreOpsTry_traitTryTResultInfallibleE.branch r1
+  match cf with
+  | core.ops.control_flow.ControlFlow.Continue val =>
+    let i23 ← lift (s1 &&& mask)
+    let r2 ← U64.Insts.CoreConvertTryFromU128TryFromIntError.try_from i23
+    let r3 ←
+      core.result.Result.map_err
+        field.add_limbs.closure_1.Insts.CoreOpsFunctionFnOnceTupleTryFromIntErrorError
+        r2 ()
+    let cf1 ←
+      core.result.Result.Insts.CoreOpsTry_traitTryTResultInfallibleE.branch r3
+    match cf1 with
+    | core.ops.control_flow.ControlFlow.Continue val1 =>
+      let i24 ← lift (s2 &&& mask)
+      let r4 ← U64.Insts.CoreConvertTryFromU128TryFromIntError.try_from i24
+      let r5 ←
+        core.result.Result.map_err
+          field.add_limbs.closure_2.Insts.CoreOpsFunctionFnOnceTupleTryFromIntErrorError
+          r4 ()
+      let cf2 ←
+        core.result.Result.Insts.CoreOpsTry_traitTryTResultInfallibleE.branch
+          r5
+      match cf2 with
+      | core.ops.control_flow.ControlFlow.Continue val2 =>
+        let i25 ← lift (s3 &&& mask)
+        let r6 ← U64.Insts.CoreConvertTryFromU128TryFromIntError.try_from i25
+        let r7 ←
+          core.result.Result.map_err
+            field.add_limbs.closure_3.Insts.CoreOpsFunctionFnOnceTupleTryFromIntErrorError
+            r6 ()
+        let cf3 ←
+          core.result.Result.Insts.CoreOpsTry_traitTryTResultInfallibleE.branch
+            r7
+        match cf3 with
+        | core.ops.control_flow.ControlFlow.Continue val3 =>
+          let i26 ← s3 >>> 64#i32
+          ok (core.result.Result.Ok
+            (Array.make 4#usize [ val, val1, val2, val3 ], i26 != 0#u128))
+        | core.ops.control_flow.ControlFlow.Break residual =>
+          core.result.Result.Insts.CoreOpsTry_traitFromResidualResultInfallibleE.from_residual
+            ((Array Std.U64 4#usize) × Bool) (core.convert.FromSame
+            error.Error) residual
+      | core.ops.control_flow.ControlFlow.Break residual =>
+        core.result.Result.Insts.CoreOpsTry_traitFromResidualResultInfallibleE.from_residual
+          ((Array Std.U64 4#usize) × Bool) (core.convert.FromSame error.Error)
+          residual
+    | core.ops.control_flow.ControlFlow.Break residual =>
+      core.result.Result.Insts.CoreOpsTry_traitFromResidualResultInfallibleE.from_residual
+        ((Array Std.U64 4#usize) × Bool) (core.convert.FromSame error.Error)
+        residual
+  | core.ops.control_flow.ControlFlow.Break residual =>
+    core.result.Result.Insts.CoreOpsTry_traitFromResidualResultInfallibleE.from_residual
+      ((Array Std.U64 4#usize) × Bool) (core.convert.FromSame error.Error)
+      residual
+
 /-- [minroot_core::field::sub_limbs::{core::ops::function::FnOnce<(core::num::error::TryFromIntError), minroot_core::error::Error> for minroot_core::field::sub_limbs::closure#3}::call_once]:
-    Source: 'crates/minroot-core/src/field.rs', lines 324:46-324:67 -/
+    Source: 'crates/minroot-core/src/field.rs', lines 336:46-336:67 -/
 def
   field.sub_limbs.closure_3.Insts.CoreOpsFunctionFnOnceTupleTryFromIntErrorError.call_once
   (c : field.sub_limbs.closure_3)
@@ -31,7 +210,7 @@ def
   ok error.Error.Truncation
 
 /-- Trait implementation: [minroot_core::field::sub_limbs::{core::ops::function::FnOnce<(core::num::error::TryFromIntError), minroot_core::error::Error> for minroot_core::field::sub_limbs::closure#3}]
-    Source: 'crates/minroot-core/src/field.rs', lines 324:46-324:67 -/
+    Source: 'crates/minroot-core/src/field.rs', lines 336:46-336:67 -/
 @[reducible]
 def
   field.sub_limbs.closure_3.Insts.CoreOpsFunctionFnOnceTupleTryFromIntErrorError
@@ -42,7 +221,7 @@ def
 }
 
 /-- [minroot_core::field::sub_limbs::{core::ops::function::FnOnce<(core::num::error::TryFromIntError), minroot_core::error::Error> for minroot_core::field::sub_limbs::closure#2}::call_once]:
-    Source: 'crates/minroot-core/src/field.rs', lines 323:46-323:67 -/
+    Source: 'crates/minroot-core/src/field.rs', lines 335:46-335:67 -/
 def
   field.sub_limbs.closure_2.Insts.CoreOpsFunctionFnOnceTupleTryFromIntErrorError.call_once
   (c : field.sub_limbs.closure_2)
@@ -52,7 +231,7 @@ def
   ok error.Error.Truncation
 
 /-- Trait implementation: [minroot_core::field::sub_limbs::{core::ops::function::FnOnce<(core::num::error::TryFromIntError), minroot_core::error::Error> for minroot_core::field::sub_limbs::closure#2}]
-    Source: 'crates/minroot-core/src/field.rs', lines 323:46-323:67 -/
+    Source: 'crates/minroot-core/src/field.rs', lines 335:46-335:67 -/
 @[reducible]
 def
   field.sub_limbs.closure_2.Insts.CoreOpsFunctionFnOnceTupleTryFromIntErrorError
@@ -63,7 +242,7 @@ def
 }
 
 /-- [minroot_core::field::sub_limbs::{core::ops::function::FnOnce<(core::num::error::TryFromIntError), minroot_core::error::Error> for minroot_core::field::sub_limbs::closure#1}::call_once]:
-    Source: 'crates/minroot-core/src/field.rs', lines 322:46-322:67 -/
+    Source: 'crates/minroot-core/src/field.rs', lines 334:46-334:67 -/
 def
   field.sub_limbs.closure_1.Insts.CoreOpsFunctionFnOnceTupleTryFromIntErrorError.call_once
   (c : field.sub_limbs.closure_1)
@@ -73,7 +252,7 @@ def
   ok error.Error.Truncation
 
 /-- Trait implementation: [minroot_core::field::sub_limbs::{core::ops::function::FnOnce<(core::num::error::TryFromIntError), minroot_core::error::Error> for minroot_core::field::sub_limbs::closure#1}]
-    Source: 'crates/minroot-core/src/field.rs', lines 322:46-322:67 -/
+    Source: 'crates/minroot-core/src/field.rs', lines 334:46-334:67 -/
 @[reducible]
 def
   field.sub_limbs.closure_1.Insts.CoreOpsFunctionFnOnceTupleTryFromIntErrorError
@@ -84,7 +263,7 @@ def
 }
 
 /-- [minroot_core::field::sub_limbs::{core::ops::function::FnOnce<(core::num::error::TryFromIntError), minroot_core::error::Error> for minroot_core::field::sub_limbs::closure}::call_once]:
-    Source: 'crates/minroot-core/src/field.rs', lines 321:46-321:67 -/
+    Source: 'crates/minroot-core/src/field.rs', lines 333:46-333:67 -/
 def
   field.sub_limbs.closure.Insts.CoreOpsFunctionFnOnceTupleTryFromIntErrorError.call_once
   (c : field.sub_limbs.closure) (tupled_args : core.num.error.TryFromIntError)
@@ -94,7 +273,7 @@ def
   ok error.Error.Truncation
 
 /-- Trait implementation: [minroot_core::field::sub_limbs::{core::ops::function::FnOnce<(core::num::error::TryFromIntError), minroot_core::error::Error> for minroot_core::field::sub_limbs::closure}]
-    Source: 'crates/minroot-core/src/field.rs', lines 321:46-321:67 -/
+    Source: 'crates/minroot-core/src/field.rs', lines 333:46-333:67 -/
 @[reducible]
 def
   field.sub_limbs.closure.Insts.CoreOpsFunctionFnOnceTupleTryFromIntErrorError
@@ -105,7 +284,7 @@ def
 }
 
 /-- [minroot_core::field::sub_limbs]:
-    Source: 'crates/minroot-core/src/field.rs', lines 312:0-326:1 -/
+    Source: 'crates/minroot-core/src/field.rs', lines 324:0-338:1 -/
 def field.sub_limbs
   (a : Array Std.U64 4#usize) (b : Array Std.U64 4#usize) :
   Result (core.result.Result ((Array Std.U64 4#usize) × Bool) error.Error)
@@ -203,7 +382,7 @@ def field.sub_limbs
       residual
 
 /-- [minroot_core::field::gte_modulus]:
-    Source: 'crates/minroot-core/src/field.rs', lines 331:0-341:1 -/
+    Source: 'crates/minroot-core/src/field.rs', lines 343:0-353:1 -/
 def field.gte_modulus
   (a : Array Std.U64 4#usize) (modulus : Array Std.U64 4#usize) :
   Result Bool
@@ -228,7 +407,7 @@ def field.gte_modulus
         ok (i6 >= i7)
 
 /-- [minroot_core::field::shift_left_one]:
-    Source: 'crates/minroot-core/src/field.rs', lines 407:0-414:1 -/
+    Source: 'crates/minroot-core/src/field.rs', lines 419:0-426:1 -/
 def field.shift_left_one
   (a : Array Std.U64 4#usize) : Result (Array Std.U64 4#usize) := do
   let i ← Array.index_usize a 0#usize
@@ -248,7 +427,7 @@ def field.shift_left_one
   ok (Array.make 4#usize [ i1, i5, i9, i13 ])
 
 /-- [minroot_core::field::reduce_wide_rec]:
-    Source: 'crates/minroot-core/src/field.rs', lines 379:0-401:1 -/
+    Source: 'crates/minroot-core/src/field.rs', lines 391:0-413:1 -/
 def field.reduce_wide_rec
   (wide : Array Std.U64 8#usize) (modulus : Array Std.U64 4#usize)
   (remaining : Std.Usize) (acc : Array Std.U64 4#usize) :
@@ -288,7 +467,7 @@ def field.reduce_wide_rec
 partial_fixpoint
 
 /-- [minroot_core::field::reduce_wide]:
-    Source: 'crates/minroot-core/src/field.rs', lines 364:0-369:1 -/
+    Source: 'crates/minroot-core/src/field.rs', lines 376:0-381:1 -/
 def field.reduce_wide
   (wide : Array Std.U64 8#usize) (modulus : Array Std.U64 4#usize) :
   Result (core.result.Result (Array Std.U64 4#usize) error.Error)
