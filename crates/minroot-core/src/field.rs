@@ -230,15 +230,8 @@ impl FieldElement {
     /// (unreachable).
     pub fn try_add(self, rhs: Self) -> Result<Self, Error> {
         debug_assert_eq!(self.curve, rhs.curve);
-        let modulus = self.curve.modulus();
-        let (sum, carry) = add_limbs(&self.limbs, &rhs.limbs)?;
-        let result = if carry || gte_modulus(&sum, &modulus) {
-            sub_limbs(&sum, &modulus)?.0
-        } else {
-            sum
-        };
         Ok(Self {
-            limbs: result,
+            limbs: mod_add(&self.limbs, &rhs.limbs, &self.curve.modulus())?,
             curve: self.curve,
         })
     }
@@ -250,15 +243,8 @@ impl FieldElement {
     /// Propagates [`Error::Truncation`] from limb subtraction (unreachable).
     pub fn try_sub(self, rhs: Self) -> Result<Self, Error> {
         debug_assert_eq!(self.curve, rhs.curve);
-        let modulus = self.curve.modulus();
-        let (diff, borrow) = sub_limbs(&self.limbs, &rhs.limbs)?;
-        let result = if borrow {
-            add_limbs(&diff, &modulus)?.0
-        } else {
-            diff
-        };
         Ok(Self {
-            limbs: result,
+            limbs: mod_sub(&self.limbs, &rhs.limbs, &self.curve.modulus())?,
             curve: self.curve,
         })
     }
@@ -350,6 +336,53 @@ fn gte_modulus(a: &[u64; LIMBS], modulus: &[u64; LIMBS]) -> bool {
     } else {
         a[0] >= modulus[0]
     }
+}
+
+/// Modular addition of two reduced 4-limb values: `(a + b) mod modulus`.
+///
+/// Adds the limbs, then conditionally subtracts `modulus` once if the sum
+/// carried out of 256 bits or is already `>= modulus`.  For inputs below
+/// `modulus` (with `modulus < 2^255`) the sum is below `2·modulus`, so a
+/// single conditional subtraction restores the canonical residue.
+///
+/// # Errors
+///
+/// Propagates [`Error::Truncation`] from limb addition or subtraction
+/// (unreachable).
+fn mod_add(
+    a: &[u64; LIMBS],
+    b: &[u64; LIMBS],
+    modulus: &[u64; LIMBS],
+) -> Result<[u64; LIMBS], Error> {
+    let (sum, carry) = add_limbs(a, b)?;
+    let result = if carry || gte_modulus(&sum, modulus) {
+        sub_limbs(&sum, modulus)?.0
+    } else {
+        sum
+    };
+    Ok(result)
+}
+
+/// Modular subtraction of two reduced 4-limb values: `(a - b) mod modulus`.
+///
+/// Subtracts the limbs, then adds `modulus` back if the subtraction
+/// borrowed (i.e. `a < b`), yielding the canonical residue.
+///
+/// # Errors
+///
+/// Propagates [`Error::Truncation`] from limb subtraction (unreachable).
+fn mod_sub(
+    a: &[u64; LIMBS],
+    b: &[u64; LIMBS],
+    modulus: &[u64; LIMBS],
+) -> Result<[u64; LIMBS], Error> {
+    let (diff, borrow) = sub_limbs(a, b)?;
+    let result = if borrow {
+        add_limbs(&diff, modulus)?.0
+    } else {
+        diff
+    };
+    Ok(result)
 }
 
 /// Schoolbook multiplication producing an 8-limb (512-bit) result.

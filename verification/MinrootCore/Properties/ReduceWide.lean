@@ -428,4 +428,37 @@ theorem reduce_wide_spec (wide : Array Std.U64 8#usize)
   refine ⟨out, hres, hlt, ?_⟩
   rw [heq, hrepeat, Nat.zero_mul, Nat.zero_add, hi1, Nat.mod_eq_of_lt hval8]
 
+/-- `mod_add a b modulus` computes the canonical modular sum `(a + b) % modulus`
+    for reduced inputs `a, b < modulus`, when `2·modulus ≤ 2^256` (so the sum stays
+    below `2^256` and a single conditional subtraction restores the residue).
+    Composes `add_limbs` (full adder), `gte_modulus`, and `sub_limbs`. -/
+@[step] theorem mod_add_spec (a b modulus : Array Std.U64 4#usize)
+    (ha : val4 a < val4 modulus) (hb : val4 b < val4 modulus)
+    (hmod : 2 * val4 modulus ≤ 2 ^ 256) :
+    mod_add a b modulus ⦃ r => ∃ out, r = core.result.Result.Ok out ∧
+      val4 out = (val4 a + val4 b) % val4 modulus ⦄ := by
+  unfold mod_add
+  step*
+  have hab : (bv256 a).toNat + (bv256 b).toNat < 2 ^ 256 := by
+    unfold val4 at ha hb hmod; omega
+  have hval_r : val4 r = val4 a + val4 b := by
+    unfold val4; rw [r_post2, BitVec.toNat_add, Nat.mod_eq_of_lt hab]
+  have hnc : ¬ (2 ^ 256 ≤ (bv256 a).toNat + (bv256 b).toNat) := by omega
+  simp only [r_post1, r_post3, hnc, decide_false, Bool.false_eq_true, if_false,
+    core.result.Result.Insts.CoreOpsTry_traitTryTResultInfallibleE.branch, bind_tc_ok]
+  step
+  simp only [b1_post, decide_eq_true_eq]
+  by_cases hge : val4 modulus ≤ val4 r
+  · rw [if_pos hge]
+    step
+    simp only [r1_post1, bind_tc_ok]
+    refine ⟨r1, rfl, ?_⟩
+    have hle : bv256 modulus ≤ bv256 r := BitVec.le_def.mpr hge
+    have hr1 : val4 r1 = val4 r - val4 modulus := by
+      unfold val4; rw [r1_post2, BitVec.toNat_sub_of_le hle]
+    rw [hr1, hval_r, Nat.mod_eq_sub_mod (by omega), Nat.mod_eq_of_lt (by omega)]
+  · rw [if_neg hge]
+    refine ⟨r, rfl, ?_⟩
+    rw [hval_r, Nat.mod_eq_of_lt (by omega)]
+
 end minroot_core.field.spec

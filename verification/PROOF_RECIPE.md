@@ -149,9 +149,36 @@ minroot_core.llbc`. It REGENERATES `Funs/Types/*_Template` but NOT the hand-edit
 re-extraction** — a running server holds the stale `Funs.olean` and lowercase
 identifiers like `add_limbs` will autobind as `Sort u` implicits.
 
-NEXT: `try_add`/`try_sub` (extract `--start-from crate::field::try_add try_sub`; they
-compose the now-verified `add_limbs`/`sub_limbs`/`gte_modulus`; the full-adder carry
-makes the conditional-subtract reasoning available; need to model the `FieldElement`
-struct / `Curve::modulus` externals). Then `mul_wide` (rewrite 4×4 schoolbook
-iterator-free first; `bv_decide` won't scale to a 512-bit multiply → needs Nat
-schoolbook decomposition), then `try_mul`.
+## (5c) `mod_add` [DONE] — verified modular field addition; and the method-extraction wall
+
+**AENEAS DROPS INHERENT IMPL METHODS.** `FieldElement::try_add`/`try_sub` (methods) are
+NOT translated even though charon puts them in the `.llbc` (the method root yields empty
+aeneas output; free-fn roots like `reduce_wide`/`add_limbs` extract fine). Also the charon
+pattern for a method is `crate::field::FieldElement::try_add` (NOT `{impl …}` forms, and
+NOT `crate::field::try_add` which is a free-fn path). FIX: factor the modular core into
+FREE functions `mod_add`/`mod_sub` (`fn mod_add(a, b, modulus) -> Result<[u64;4], Error>`),
+have the methods call them; verify the free fns. (Behavior-preserving; `cargo test` 28/28.)
+
+`mod_add_spec` (preconds `val4 a < val4 modulus`, `val4 b < val4 modulus`,
+`2 * val4 modulus ≤ 2^256`; post `val4 out = (val4 a + val4 b) % val4 modulus`) composes
+the verified leaves: `unfold mod_add; step*` (through `add_limbs`, giving the full-adder
+posts) → `have hab : … < 2^256 := by unfold val4 at ha hb hmod; omega` (note: `unfold … at`
+inside a `have` is LOCAL, outer ha/hb stay `val4`-form for later `omega`s) → `have hval_r :
+val4 r = val4 a + val4 b` (via `r_post2`+`BitVec.toNat_add`+`Nat.mod_eq_of_lt hab`) → drive
+the control flow with `simp only [r_post1, r_post3, hnc, decide_false, …, branch, bind_tc_ok]`
+(carry is false) → `step` (gte_modulus, auto-names `b1`/`b1_post`, do NOT `rename_i`) →
+`simp only [b1_post, decide_eq_true_eq]; by_cases hge` → subtract branch: `step` (sub_limbs,
+gives `r1`/`r1_post1`/`r1_post2`), `simp only [r1_post1, bind_tc_ok]`, `refine ⟨r1, rfl, ?_⟩`,
+`BitVec.le_def.mpr hge` for `bv256 modulus ≤ bv256 r`, then `BitVec.toNat_sub_of_le` +
+`Nat.mod_eq_sub_mod`/`Nat.mod_eq_of_lt` (side goals all `by omega` from the val4-level facts).
+`omega` IS available here (the existing reduce_wide_spec uses it).
+
+NEXT: `mod_sub` — BLOCKED on first characterizing `sub_limbs`'s BORROW
+(`borrow = decide (val4 a < val4 b)`), the subtractive twin of the add carry char (use
+`BitVec.usubOverflow` + a fresh-limb `sub_borrow_bit` lemma + the `bne`→bv + `Bool.eq_iff_iff`
+recipe from (5b)). CAUTION: `sub_limbs_spec` is `@[step]` and consumed by `reduce_wide_rec`
+(which `rename_i`s its post) and `mod_add` — strengthening its post will shift those renames,
+so either add a separate borrow lemma or fix `reduce_wide_rec`'s `rename_i` after. Then
+`mod_sub_spec` mirrors `mod_add` (post `val4 out = (val4 a + val4 modulus - val4 b) % val4
+modulus`). Then `mul_wide` (rewrite 4×4 schoolbook iterator-free first; `bv_decide` won't
+scale to a 512-bit multiply → needs Nat schoolbook decomposition), then `try_mul`.
