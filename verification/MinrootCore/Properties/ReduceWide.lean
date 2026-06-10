@@ -123,12 +123,28 @@ private theorem sub_borrow_concat (a0 a1 a2 a3 b0 b1 b2 b3 : BitVec 64) :
     = (a3 ++ a2 ++ a1 ++ a0) - (b3 ++ b2 ++ b1 ++ b0) := by
   bv_decide (config := { timeout := 60 })
 
+/-- The top borrow-out of the ripple chain (`d₃ >> 127`) is nonzero exactly when
+    the 256-bit subtraction underflows (`a < b`).  Fresh-limb bit-vector identity
+    (`bv_decide`); the borrow analogue of `add_carry_bit`. -/
+private theorem sub_borrow_bit (a0 a1 a2 a3 b0 b1 b2 b3 : BitVec 64) :
+    ¬((BitVec.setWidth 128 a3 - BitVec.setWidth 128 b3 -
+            if ¬(BitVec.setWidth 128 a2 - BitVec.setWidth 128 b2 -
+                    if ¬(BitVec.setWidth 128 a1 - BitVec.setWidth 128 b1 -
+                            if ¬(BitVec.setWidth 128 a0 - BitVec.setWidth 128 b0) >>> 127 = 0#128
+                            then 1#128 else 0#128) >>> 127 = 0#128
+                      then 1#128 else 0#128) >>> 127 = 0#128
+              then 1#128 else 0#128).ushiftRight 127 = 0#128)
+      ↔ (a3 ++ a2 ++ a1 ++ a0) < (b3 ++ b2 ++ b1 ++ b0) := by
+  bv_decide (config := { timeout := 120 })
+
 /-- `sub_limbs a b` returns the 256-bit wrapping difference (and a borrow flag),
     never failing.  The four limb subtractions form a ripple-borrow chain via
-    `u128`; the masked low-64 casts reassemble into the 256-bit difference. -/
+    `u128`; the masked low-64 casts reassemble into the 256-bit difference, and
+    the top borrow-out is exactly `a < b`. -/
 @[step] theorem sub_limbs_spec (a b : Array Std.U64 4#usize) :
     sub_limbs a b ⦃ r => ∃ out bo,
-      r = core.result.Result.Ok (out, bo) ∧ bv256 out = bv256 a - bv256 b ⦄ := by
+      r = core.result.Result.Ok (out, bo) ∧ bv256 out = bv256 a - bv256 b ∧
+      bo = decide (val4 a < val4 b) ⦄ := by
   unfold sub_limbs
   simp only [lift]
   step*
@@ -138,17 +154,26 @@ private theorem sub_borrow_concat (a0 a1 a2 a3 b0 b1 b2 b3 : BitVec 64) :
     core.result.Result.map_err,
     core.result.Result.Insts.CoreOpsTry_traitTryTResultInfallibleE.branch,
     mask_val_le, if_true, bind_tc_ok]
-  refine ⟨_, _, rfl, ?_⟩
-  simp only [bv256, Array.make, List.getElem!_cons_zero, List.getElem!_cons_succ,
-    Std.U64.bv, Std.U128.bv, Std.UScalar.cast_bv_eq,
-    core.convert.num.FromU128U64.from_bv_eq, core.num.U128.wrapping_sub_bv_eq,
-    Std.UScalar.bv_and, core.convert.num.FromU128Bool.from, apply_ite Std.UScalar.bv,
-    bne_iff_ne, ne_eq, Std.U128.eq_equiv_bv_eq, core.num.U64.MAX, Std.U64.ofNat_bv,
-    Std.U64.rMax, Std.UScalarTy.U64_numBits_eq,
-    show (0#u128).bv = 0#128 from rfl, show (1#u128).bv = 1#128 from rfl,
-    i_post, i2_post, i5_post, i7_post,
-    i11_post, i13_post, i17_post, i19_post, i4_post2, i10_post2, i16_post2]
-  exact sub_borrow_concat _ _ _ _ _ _ _ _
+  refine ⟨_, _, rfl, ?_, ?_⟩
+  · simp only [bv256, Array.make, List.getElem!_cons_zero, List.getElem!_cons_succ,
+      Std.U64.bv, Std.U128.bv, Std.UScalar.cast_bv_eq,
+      core.convert.num.FromU128U64.from_bv_eq, core.num.U128.wrapping_sub_bv_eq,
+      Std.UScalar.bv_and, core.convert.num.FromU128Bool.from, apply_ite Std.UScalar.bv,
+      bne_iff_ne, ne_eq, Std.U128.eq_equiv_bv_eq, core.num.U64.MAX, Std.U64.ofNat_bv,
+      Std.U64.rMax, Std.UScalarTy.U64_numBits_eq,
+      show (0#u128).bv = 0#128 from rfl, show (1#u128).bv = 1#128 from rfl,
+      i_post, i2_post, i5_post, i7_post,
+      i11_post, i13_post, i17_post, i19_post, i4_post2, i10_post2, i16_post2]
+    exact sub_borrow_concat _ _ _ _ _ _ _ _
+  · rw [Bool.eq_iff_iff]
+    simp only [val4, bv256, core.num.U128.wrapping_sub_bv_eq,
+      core.convert.num.FromU128U64.from_bv_eq, i4_post2, i10_post2, i16_post2,
+      i_post, i2_post, i5_post, i7_post, i11_post, i13_post, i17_post, i19_post,
+      Std.U64.bv, Std.U128.bv, core.convert.num.FromU128Bool.from, apply_ite Std.UScalar.bv,
+      bne_iff_ne, ne_eq, Std.U128.eq_equiv_bv_eq, decide_eq_true_eq, ← BitVec.lt_def,
+      show (0#u128).bv = 0#128 from rfl, show (1#u128).bv = 1#128 from rfl,
+      show ((127#i32).toNat) = 127 from rfl]
+    exact sub_borrow_bit _ _ _ _ _ _ _ _
 
 /-- The ripple-carry `u128` chain reassembles into a single 256-bit addition.
     Self-contained bit-vector identity over fresh limbs (`bv_decide`); the
@@ -317,7 +342,7 @@ theorem reduce_wide_rec_spec (wide : Array Std.U64 8#usize)
           unfold val4; rw [r_post2, BitVec.toNat_sub_of_le hwbge]
         omega
       · -- the post, from the IH `r_post3`
-        rename_i rsub xb2 xb1 hrp1 hrsub xst
+        rename_i rsub xb2 xb1 hrp1 hrsub hborrow xst
         have h2acc : 2 * val4 acc < 2 ^ 256 := by omega
         have hwb : val4 (Array.make 4#usize [i3, i4, i5, i6] (by simp))
             = 2 * val4 acc + incoming.val := by
@@ -460,5 +485,46 @@ theorem reduce_wide_spec (wide : Array Std.U64 8#usize)
   · rw [if_neg hge]
     refine ⟨r, rfl, ?_⟩
     rw [hval_r, Nat.mod_eq_of_lt (by omega)]
+
+/-- `mod_sub a b modulus` computes the canonical modular difference
+    `(a + modulus - b) % modulus` for reduced inputs `a, b < modulus`, when
+    `2·modulus ≤ 2^256`.  Composes `sub_limbs` (with its borrow characterization)
+    and `add_limbs`. -/
+@[step] theorem mod_sub_spec (a b modulus : Array Std.U64 4#usize)
+    (ha : val4 a < val4 modulus) (hb : val4 b < val4 modulus)
+    (hmod : 2 * val4 modulus ≤ 2 ^ 256) :
+    mod_sub a b modulus ⦃ r => ∃ out, r = core.result.Result.Ok out ∧
+      val4 out = (val4 a + val4 modulus - val4 b) % val4 modulus ⦄ := by
+  unfold mod_sub
+  step*
+  simp only [r_post1, r_post3,
+    core.result.Result.Insts.CoreOpsTry_traitTryTResultInfallibleE.branch, bind_tc_ok,
+    decide_eq_true_eq]
+  by_cases hlt : val4 a < val4 b
+  · rw [if_pos hlt]
+    step
+    simp only [r1_post1, bind_tc_ok]
+    refine ⟨_, rfl, ?_⟩
+    have hXlt : val4 a + val4 modulus < 2 ^ 256 := by omega
+    have add_bv : bv256 r1 = bv256 a + bv256 modulus - bv256 b := by
+      rw [r1_post2, r_post2]; ring
+    have hXval : (bv256 a + bv256 modulus).toNat = val4 a + val4 modulus := by
+      rw [BitVec.toNat_add]; exact Nat.mod_eq_of_lt hXlt
+    have hbleX : bv256 b ≤ bv256 a + bv256 modulus := by
+      rw [BitVec.le_def, hXval]; show val4 b ≤ val4 a + val4 modulus; omega
+    have hsum : val4 r1 = val4 a + val4 modulus - val4 b := by
+      have h1 : (bv256 r1).toNat = (bv256 a + bv256 modulus).toNat - (bv256 b).toNat := by
+        rw [add_bv, BitVec.toNat_sub_of_le hbleX]
+      simp only [val4] at *
+      omega
+    rw [hsum, Nat.mod_eq_of_lt (by omega)]
+  · rw [if_neg hlt]
+    refine ⟨r, rfl, ?_⟩
+    have hge : val4 b ≤ val4 a := by omega
+    have hle : bv256 b ≤ bv256 a := BitVec.le_def.mpr hge
+    have hdiff : val4 r = val4 a - val4 b := by
+      unfold val4; rw [r_post2, BitVec.toNat_sub_of_le hle]
+    rw [hdiff, show val4 a + val4 modulus - val4 b = val4 modulus + (val4 a - val4 b) from by omega,
+      Nat.add_mod_left, Nat.mod_eq_of_lt (by omega)]
 
 end minroot_core.field.spec

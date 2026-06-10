@@ -173,12 +173,33 @@ gives `r1`/`r1_post1`/`r1_post2`), `simp only [r1_post1, bind_tc_ok]`, `refine �
 `Nat.mod_eq_sub_mod`/`Nat.mod_eq_of_lt` (side goals all `by omega` from the val4-level facts).
 `omega` IS available here (the existing reduce_wide_spec uses it).
 
-NEXT: `mod_sub` — BLOCKED on first characterizing `sub_limbs`'s BORROW
-(`borrow = decide (val4 a < val4 b)`), the subtractive twin of the add carry char (use
-`BitVec.usubOverflow` + a fresh-limb `sub_borrow_bit` lemma + the `bne`→bv + `Bool.eq_iff_iff`
-recipe from (5b)). CAUTION: `sub_limbs_spec` is `@[step]` and consumed by `reduce_wide_rec`
-(which `rename_i`s its post) and `mod_add` — strengthening its post will shift those renames,
-so either add a separate borrow lemma or fix `reduce_wide_rec`'s `rename_i` after. Then
-`mod_sub_spec` mirrors `mod_add` (post `val4 out = (val4 a + val4 modulus - val4 b) % val4
-modulus`). Then `mul_wide` (rewrite 4×4 schoolbook iterator-free first; `bv_decide` won't
-scale to a 512-bit multiply → needs Nat schoolbook decomposition), then `try_mul`.
+## (5d) `sub_limbs` borrow char + `mod_sub` [DONE] — verified modular field subtraction
+
+`sub_limbs_spec` strengthened with the borrow conjunct `bo = decide (val4 a < val4 b)`.
+EASIER than the add carry char: BitVec `<` (`ult`) is bv_decide-native, so NO `msb` /
+`usubOverflow` detour. Borrow conjunct proof: `rw [Bool.eq_iff_iff]` then the SAME simp as the
+output conjunct (`wrapping_sub_bv_eq`, `from_bv_eq`, `i4/i10/i16_post2`, `i_post…`, `Std.U64.bv`,
+`Std.U128.bv`, `FromU128Bool.from`, `apply_ite Std.UScalar.bv`, `bne_iff_ne`, `ne_eq`,
+`eq_equiv_bv_eq`) PLUS `decide_eq_true_eq`, `← BitVec.lt_def`, `show (0#u128).bv = 0#128`,
+`show (1#u128).bv = 1#128`, `show (127#i32).toNat = 127` → `exact sub_borrow_bit _ … _`.
+`sub_borrow_bit` = fresh-limb lemma (borrow chain `.ushiftRight 127 = 0#128 ↔ (a3++…) <
+(b3++…)`, BitVec ult RHS — `.toNat < .toNat` was OUT of bv_decide's fragment, use BitVec `<`);
+`bv_decide (timeout := 120)`.
+
+CAUTION REALIZED: strengthening `sub_limbs_spec` shifted `reduce_wide_rec`'s `rename_i rsub xb2
+xb1 hrp1 hrsub xst` → fixed by inserting the new borrow hyp before the do-marker:
+`rename_i rsub xb2 xb1 hrp1 hrsub hborrow xst` (the post3 lands between post2=`hrsub` and the
+do-marker=`xst`; `mod_add`'s use of `sub_limbs` survived unchanged since it only `simp`s `r1_post1`).
+
+`mod_sub_spec` (post `val4 out = (val4 a + val4 modulus - val4 b) % val4 modulus`) mirrors
+`mod_add`: `step*` (sub_limbs, now giving the borrow `r_post3`) → `simp [r_post1, r_post3,
+branch, bind_tc_ok, decide_eq_true_eq]` → `by_cases hlt : val4 a < val4 b`. No-borrow: `if_neg`,
+`val4 r = val4 a - val4 b` (`toNat_sub_of_le`), then `Nat.add_mod_left` + `Nat.mod_eq_of_lt`.
+Borrow: `if_pos`, `step` add_limbs, `bv256 r1 = bv256 a + bv256 modulus - bv256 b` (`rw [r1_post2,
+r_post2]; ring`), then `BitVec.toNat_add`/`toNat_sub_of_le` to get `val4 r1 = a+modulus-b`
+(finish the `val4`↔`.toNat` defeq gaps with `simp only [val4] at *; omega`).
+
+NEXT: `mul_wide` (rewrite 4×4 schoolbook iterator-free first; `bv_decide` won't scale to a
+512-bit multiply → needs Nat schoolbook decomposition), then `try_mul`. Reminder: Aeneas drops
+inherent methods, so verify the free-fn `try_mul` core (already a free composition of mul_wide
++ reduce_wide; may not need a refactor).
