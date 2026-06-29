@@ -24,43 +24,83 @@ inductive error.Error where
 | Truncation : error.Error
 
 /-- [minroot_core::field::add_limbs::closure#3]
-    Source: 'crates/minroot-core/src/field.rs', lines 294:46-294:67 -/
+    Source: 'crates/minroot-core/src/field.rs', lines 292:46-292:67 -/
 @[reducible]
 def field.add_limbs.closure_3 := Unit
 
 /-- [minroot_core::field::add_limbs::closure#2]
-    Source: 'crates/minroot-core/src/field.rs', lines 293:46-293:67 -/
+    Source: 'crates/minroot-core/src/field.rs', lines 291:46-291:67 -/
 @[reducible]
 def field.add_limbs.closure_2 := Unit
 
 /-- [minroot_core::field::add_limbs::closure#1]
-    Source: 'crates/minroot-core/src/field.rs', lines 292:46-292:67 -/
+    Source: 'crates/minroot-core/src/field.rs', lines 290:46-290:67 -/
 @[reducible]
 def field.add_limbs.closure_1 := Unit
 
 /-- [minroot_core::field::add_limbs::closure]
-    Source: 'crates/minroot-core/src/field.rs', lines 291:46-291:67 -/
+    Source: 'crates/minroot-core/src/field.rs', lines 289:46-289:67 -/
 @[reducible]
 def field.add_limbs.closure := Unit
 
 /-- [minroot_core::field::sub_limbs::closure#3]
-    Source: 'crates/minroot-core/src/field.rs', lines 322:46-322:67 -/
+    Source: 'crates/minroot-core/src/field.rs', lines 320:46-320:67 -/
 @[reducible]
 def field.sub_limbs.closure_3 := Unit
 
 /-- [minroot_core::field::sub_limbs::closure#2]
-    Source: 'crates/minroot-core/src/field.rs', lines 321:46-321:67 -/
+    Source: 'crates/minroot-core/src/field.rs', lines 319:46-319:67 -/
 @[reducible]
 def field.sub_limbs.closure_2 := Unit
 
 /-- [minroot_core::field::sub_limbs::closure#1]
-    Source: 'crates/minroot-core/src/field.rs', lines 320:46-320:67 -/
+    Source: 'crates/minroot-core/src/field.rs', lines 318:46-318:67 -/
 @[reducible]
 def field.sub_limbs.closure_1 := Unit
 
 /-- [minroot_core::field::sub_limbs::closure]
-    Source: 'crates/minroot-core/src/field.rs', lines 319:46-319:67 -/
+    Source: 'crates/minroot-core/src/field.rs', lines 317:46-317:67 -/
 @[reducible]
 def field.sub_limbs.closure := Unit
+
+/-- [minroot_core::field::mul_wide::closure#7]
+    Source: 'crates/minroot-core/src/field.rs', lines 469:34-469:55 -/
+@[reducible]
+def field.mul_wide.closure_7 := Unit
+
+/-- [minroot_core::field::mul_wide::closure#6]
+    Source: 'crates/minroot-core/src/field.rs', lines 468:34-468:55 -/
+@[reducible]
+def field.mul_wide.closure_6 := Unit
+
+/-- [minroot_core::field::mul_wide::closure#5]
+    Source: 'crates/minroot-core/src/field.rs', lines 467:34-467:55 -/
+@[reducible]
+def field.mul_wide.closure_5 := Unit
+
+/-- [minroot_core::field::mul_wide::closure#4]
+    Source: 'crates/minroot-core/src/field.rs', lines 466:34-466:55 -/
+@[reducible]
+def field.mul_wide.closure_4 := Unit
+
+/-- [minroot_core::field::mul_wide::closure#3]
+    Source: 'crates/minroot-core/src/field.rs', lines 465:34-465:55 -/
+@[reducible]
+def field.mul_wide.closure_3 := Unit
+
+/-- [minroot_core::field::mul_wide::closure#2]
+    Source: 'crates/minroot-core/src/field.rs', lines 464:34-464:55 -/
+@[reducible]
+def field.mul_wide.closure_2 := Unit
+
+/-- [minroot_core::field::mul_wide::closure#1]
+    Source: 'crates/minroot-core/src/field.rs', lines 463:34-463:55 -/
+@[reducible]
+def field.mul_wide.closure_1 := Unit
+
+/-- [minroot_core::field::mul_wide::closure]
+    Source: 'crates/minroot-core/src/field.rs', lines 462:34-462:55 -/
+@[reducible]
+def field.mul_wide.closure := Unit
 
 end minroot_core

@@ -35,6 +35,48 @@ def val4 (a : Array Std.U64 4#usize) : Nat := (bv256 a).toNat
 /-- Little-endian value of an 8-limb (512-bit) wide product. -/
 def val8 (w : Array Std.U64 8#usize) : Nat := (bv512 w).toNat
 
+/-- `toNat` of a bit-vector concatenation in additive form: the high part is
+    weighted by `2^m` and disjointly added to the (bounded) low part.  Lets a
+    nested `++` collapse to a positional little-endian sum that `ring`/`omega`
+    can manipulate. -/
+private theorem toNat_append_add {n m : Nat} (x : BitVec n) (y : BitVec m) :
+    (x ++ y).toNat = x.toNat * 2 ^ m + y.toNat := by
+  rw [BitVec.toNat_append, ← Nat.shiftLeft_add_eq_or_of_lt y.isLt, Nat.shiftLeft_eq]
+
+/-- The 4×4 schoolbook (comba) reassembly as a *purely linear* fact over the concrete base
+    `2^64`: given the carry/limb decomposition of each column (`column = limb + 2^64·carry`),
+    the little-endian recombination of the eight output limbs equals the positional sum of the
+    sixteen partial products.  The column relations are supplied as linear hypotheses, so `omega`
+    closes it with no `div`/`mod` reasoning at all (and therefore quickly). -/
+private theorem comba_recombine
+    (P00 P01 P02 P03 P10 P11 P12 P13 P20 P21 P22 P23 P30 P31 P32 P33 : Nat)
+    (c0 c1 c2 c3 c4 c5 c6 c7 c8 c9 c10 c11 c12 c13 c14 c15 : Nat)
+    (mA1 mA2 mA3 mB1 mB2 mB3 mC2 mC3 mC4 : Nat)
+    (L0 L1 L2 L3 L4 L5 L6 L7 : Nat)
+    (dA0 : P00 = L0 + 2 ^ 64 * c0)
+    (dA1 : P01 + c0 = mA1 + 2 ^ 64 * c1)
+    (dA2 : P02 + c1 = mA2 + 2 ^ 64 * c2)
+    (dA3 : P03 + c2 = mA3 + 2 ^ 64 * c3)
+    (dB0 : P10 + mA1 = L1 + 2 ^ 64 * c4)
+    (dB1 : P11 + mA2 + c4 = mB1 + 2 ^ 64 * c5)
+    (dB2 : P12 + mA3 + c5 = mB2 + 2 ^ 64 * c6)
+    (dB3 : P13 + c3 + c6 = mB3 + 2 ^ 64 * c7)
+    (dC0 : P20 + mB1 = L2 + 2 ^ 64 * c8)
+    (dC1 : P21 + mB2 + c8 = mC2 + 2 ^ 64 * c9)
+    (dC2 : P22 + mB3 + c9 = mC3 + 2 ^ 64 * c10)
+    (dC3 : P23 + c7 + c10 = mC4 + 2 ^ 64 * c11)
+    (dD0 : P30 + mC2 = L3 + 2 ^ 64 * c12)
+    (dD1 : P31 + mC3 + c12 = L4 + 2 ^ 64 * c13)
+    (dD2 : P32 + mC4 + c13 = L5 + 2 ^ 64 * c14)
+    (dD3 : P33 + c11 + c14 = L6 + 2 ^ 64 * c15)
+    (dTop : L7 = c15) :
+    L0 + L1 * 2 ^ 64 + L2 * 2 ^ 128 + L3 * 2 ^ 192 + L4 * 2 ^ 256 + L5 * 2 ^ 320
+      + L6 * 2 ^ 384 + L7 * 2 ^ 448
+    = P00 + (P01 + P10) * 2 ^ 64 + (P02 + P11 + P20) * 2 ^ 128
+      + (P03 + P12 + P21 + P30) * 2 ^ 192 + (P13 + P22 + P31) * 2 ^ 256
+      + (P23 + P32) * 2 ^ 320 + P33 * 2 ^ 384 := by
+  omega
+
 /-- The `k`-th bit (`0 ≤ k < 512`) of the wide product, as a `Nat` (0 or 1). -/
 def wideBit (w : Array Std.U64 8#usize) (k : Nat) : Nat :=
   ((w.val[k / 64]!).val >>> (k % 64)) &&& 1
@@ -526,5 +568,140 @@ theorem reduce_wide_spec (wide : Array Std.U64 8#usize)
       unfold val4; rw [r_post2, BitVec.toNat_sub_of_le hle]
     rw [hdiff, show val4 a + val4 modulus - val4 b = val4 modulus + (val4 a - val4 b) from by omega,
       Nat.add_mod_left, Nat.mod_eq_of_lt (by omega)]
+
+set_option maxHeartbeats 10000000 in
+set_option maxRecDepth 100000 in
+set_option exponentiation.threshold 600 in
+/-- `mul_wide a b` returns the exact 512-bit product `a * b` (no reduction).
+    The unrolled 4x4 schoolbook reassembles to the full product. -/
+@[step] theorem mul_wide_spec (a b : Array Std.U64 4#usize) :
+    mul_wide a b ⦃ r => ∃ out, r = core.result.Result.Ok out ∧
+      val8 out = val4 a * val4 b ⦄ := by
+  unfold mul_wide
+  simp only [lift]
+  step*
+  have hr7 : (r7 : Std.U128).val ≤ Std.U64.max := by scalar_tac
+  simp only [U64.Insts.CoreConvertTryFromU128TryFromIntError.try_from,
+    core.result.Result.map_err,
+    core.result.Result.Insts.CoreOpsTry_traitTryTResultInfallibleE.branch,
+    mask_val_le, hr7, if_true, bind_tc_ok]
+  refine ⟨_, rfl, ?_⟩
+  -- Aeneas `step*` materializes the `>>> 64` carries as variables but INLINES the `&&& mask`
+  -- intermediates, so each output limb's term recursively embeds every prior column and the
+  -- assembled goal is too large for any single tactic.  Materialize the nine forward-fed masks
+  -- (`R*`) and seven output masks (`M*`) as opaque vars: `set` rewrites the carry hypotheses too,
+  -- and `clear_value` stops `omega` from re-unfolding them.  Innermost first so each stays small.
+  set R1 := ((core.num.U128.wrapping_add (core.num.U128.wrapping_mul (core.convert.num.FromU128U64.from i) (core.convert.num.FromU128U64.from i5)) i8) &&& core.convert.num.FromU128U64.from core.num.U64.MAX) with hR1
+  set R2 := ((core.num.U128.wrapping_add (core.num.U128.wrapping_mul (core.convert.num.FromU128U64.from i) (core.convert.num.FromU128U64.from i10)) i13) &&& core.convert.num.FromU128U64.from core.num.U64.MAX) with hR2
+  set R3 := ((core.num.U128.wrapping_add (core.num.U128.wrapping_mul (core.convert.num.FromU128U64.from i) (core.convert.num.FromU128U64.from i15)) i18) &&& core.convert.num.FromU128U64.from core.num.U64.MAX) with hR3
+  set R21 := ((core.num.U128.wrapping_add (core.num.U128.wrapping_add (core.num.U128.wrapping_mul (core.convert.num.FromU128U64.from i19) (core.convert.num.FromU128U64.from i5)) R2) i27) &&& core.convert.num.FromU128U64.from core.num.U64.MAX) with hR21
+  set R31 := ((core.num.U128.wrapping_add (core.num.U128.wrapping_add (core.num.U128.wrapping_mul (core.convert.num.FromU128U64.from i19) (core.convert.num.FromU128U64.from i10)) R3) i32) &&& core.convert.num.FromU128U64.from core.num.U64.MAX) with hR31
+  set R41 := ((core.num.U128.wrapping_add (core.num.U128.wrapping_add (core.num.U128.wrapping_mul (core.convert.num.FromU128U64.from i19) (core.convert.num.FromU128U64.from i15)) r4) i37) &&& core.convert.num.FromU128U64.from core.num.U64.MAX) with hR41
+  set R32 := ((core.num.U128.wrapping_add (core.num.U128.wrapping_add (core.num.U128.wrapping_mul (core.convert.num.FromU128U64.from i38) (core.convert.num.FromU128U64.from i5)) R31) i46) &&& core.convert.num.FromU128U64.from core.num.U64.MAX) with hR32
+  set R42 := ((core.num.U128.wrapping_add (core.num.U128.wrapping_add (core.num.U128.wrapping_mul (core.convert.num.FromU128U64.from i38) (core.convert.num.FromU128U64.from i10)) R41) i51) &&& core.convert.num.FromU128U64.from core.num.U64.MAX) with hR42
+  set R51 := ((core.num.U128.wrapping_add (core.num.U128.wrapping_add (core.num.U128.wrapping_mul (core.convert.num.FromU128U64.from i38) (core.convert.num.FromU128U64.from i15)) r5) i56) &&& core.convert.num.FromU128U64.from core.num.U64.MAX) with hR51
+  set M0 := ((core.num.U128.wrapping_mul (core.convert.num.FromU128U64.from i) (core.convert.num.FromU128U64.from i2)) &&& core.convert.num.FromU128U64.from core.num.U64.MAX) with hM0
+  set M1 := ((core.num.U128.wrapping_add (core.num.U128.wrapping_mul (core.convert.num.FromU128U64.from i19) (core.convert.num.FromU128U64.from i2)) R1) &&& core.convert.num.FromU128U64.from core.num.U64.MAX) with hM1
+  set M2 := ((core.num.U128.wrapping_add (core.num.U128.wrapping_mul (core.convert.num.FromU128U64.from i38) (core.convert.num.FromU128U64.from i2)) R21) &&& core.convert.num.FromU128U64.from core.num.U64.MAX) with hM2
+  set M3 := ((core.num.U128.wrapping_add (core.num.U128.wrapping_mul (core.convert.num.FromU128U64.from i57) (core.convert.num.FromU128U64.from i2)) R32) &&& core.convert.num.FromU128U64.from core.num.U64.MAX) with hM3
+  set M4 := ((core.num.U128.wrapping_add (core.num.U128.wrapping_add (core.num.U128.wrapping_mul (core.convert.num.FromU128U64.from i57) (core.convert.num.FromU128U64.from i5)) R42) i65) &&& core.convert.num.FromU128U64.from core.num.U64.MAX) with hM4
+  set M5 := ((core.num.U128.wrapping_add (core.num.U128.wrapping_add (core.num.U128.wrapping_mul (core.convert.num.FromU128U64.from i57) (core.convert.num.FromU128U64.from i10)) R51) i70) &&& core.convert.num.FromU128U64.from core.num.U64.MAX) with hM5
+  set M6 := ((core.num.U128.wrapping_add (core.num.U128.wrapping_add (core.num.U128.wrapping_mul (core.convert.num.FromU128U64.from i57) (core.convert.num.FromU128U64.from i15)) r6) i75) &&& core.convert.num.FromU128U64.from core.num.U64.MAX) with hM6
+  clear_value R1 R2 R3 R21 R31 R41 R32 R42 R51 M0 M1 M2 M3 M4 M5 M6
+  have hmax : (core.num.U64.MAX).val = 2 ^ 64 - 1 := rfl
+  have hva : val4 a = i.val + i19.val * 2 ^ 64 + i38.val * 2 ^ 128 + i57.val * 2 ^ 192 := by
+    simp only [val4, bv256, ← i_post, ← i19_post, ← i38_post, ← i57_post,
+      toNat_append_add, ← Std.U64.bv_toNat]; ring
+  have hvb : val4 b = i2.val + i5.val * 2 ^ 64 + i10.val * 2 ^ 128 + i15.val * 2 ^ 192 := by
+    simp only [val4, bv256, ← i2_post, ← i5_post, ← i10_post, ← i15_post,
+      toNat_append_add, ← Std.U64.bv_toNat]; ring
+  have hrhs : val4 a * val4 b =
+      i.val * i2.val
+      + (i.val * i5.val + i19.val * i2.val) * 2 ^ 64
+      + (i.val * i10.val + i19.val * i5.val + i38.val * i2.val) * 2 ^ 128
+      + (i.val * i15.val + i19.val * i10.val + i38.val * i5.val + i57.val * i2.val) * 2 ^ 192
+      + (i19.val * i15.val + i38.val * i10.val + i57.val * i5.val) * 2 ^ 256
+      + (i38.val * i15.val + i57.val * i10.val) * 2 ^ 320
+      + (i57.val * i15.val) * 2 ^ 384 := by
+    rw [hva, hvb]; ring
+  rw [hrhs]
+  -- Each 64×64 product is `≤ (2^64−1)^2`, so every intermediate `wrapping_*` (mod 2^128) stays
+  -- below `2^128` and the truncations are exact.  These bounds let the carry chain be expressed
+  -- with `Nat.div`/`Nat.mod` by `2^64` only.
+  have hbnd : ∀ x y : Std.U64, x.val * y.val ≤ (2 ^ 64 - 1) * (2 ^ 64 - 1) := fun x y =>
+    Nat.mul_le_mul (by scalar_tac) (by scalar_tac)
+  have b00 := hbnd i i2;   have b01 := hbnd i i5;   have b02 := hbnd i i10;   have b03 := hbnd i i15
+  have b10 := hbnd i19 i2; have b11 := hbnd i19 i5; have b12 := hbnd i19 i10; have b13 := hbnd i19 i15
+  have b20 := hbnd i38 i2; have b21 := hbnd i38 i5; have b22 := hbnd i38 i10; have b23 := hbnd i38 i15
+  have b30 := hbnd i57 i2; have b31 := hbnd i57 i5; have b32 := hbnd i57 i10; have b33 := hbnd i57 i15
+  -- Project the `.val` of each materialized mask, then reduce every carry post AND every mask
+  -- value to a clean `Nat` (products and lower carries kept as atoms) in one `simp`.
+  have hM0v := congrArg Std.UScalar.val hM0
+  have hM1v := congrArg Std.UScalar.val hM1
+  have hM2v := congrArg Std.UScalar.val hM2
+  have hM3v := congrArg Std.UScalar.val hM3
+  have hM4v := congrArg Std.UScalar.val hM4
+  have hM5v := congrArg Std.UScalar.val hM5
+  have hM6v := congrArg Std.UScalar.val hM6
+  have hR1v := congrArg Std.UScalar.val hR1
+  have hR2v := congrArg Std.UScalar.val hR2
+  have hR3v := congrArg Std.UScalar.val hR3
+  have hR21v := congrArg Std.UScalar.val hR21
+  have hR31v := congrArg Std.UScalar.val hR31
+  have hR41v := congrArg Std.UScalar.val hR41
+  have hR32v := congrArg Std.UScalar.val hR32
+  have hR42v := congrArg Std.UScalar.val hR42
+  have hR51v := congrArg Std.UScalar.val hR51
+  simp only [core.num.U128.wrapping_mul_val_eq, core.num.U128.wrapping_add_val_eq,
+    Std.UScalar.val_and, core.convert.num.FromU128U64.from_val_eq, UScalar.size, UScalarTy.numBits,
+    hmax, Nat.and_two_pow_sub_one_eq_mod, Nat.shiftRight_eq_div_pow] at i8_post1 i13_post1 i18_post1 r4_post1 i27_post1 i32_post1 i37_post1 r5_post1 i46_post1 i51_post1 i56_post1 r6_post1 i65_post1 i70_post1 i75_post1 r7_post1 hM0v hM1v hM2v hM3v hM4v hM5v hM6v hR1v hR2v hR3v hR21v hR31v hR41v hR32v hR42v hR51v
+  simp only [val8, bv512, Array.make, List.getElem!_cons_zero, List.getElem!_cons_succ,
+    toNat_append_add, Std.U64.bv_toNat,
+    UScalar.cast_val_eq, UScalarTy.numBits, Std.UScalar.val_and,
+    core.convert.num.FromU128U64.from_val_eq, core.num.U128.wrapping_mul_val_eq,
+    core.num.U128.wrapping_add_val_eq, UScalar.size, hmax,
+    Nat.and_two_pow_sub_one_eq_mod, Nat.shiftRight_eq_div_pow]
+  clear hva hvb hrhs hmax hbnd hR1 hR2 hR3 hR21 hR31 hR41 hR32 hR42 hR51 hM0 hM1 hM2 hM3 hM4 hM5 hM6
+  have h := comba_recombine
+    (P00 := i.val*i2.val) (P01 := i.val*i5.val) (P02 := i.val*i10.val) (P03 := i.val*i15.val)
+    (P10 := i19.val*i2.val) (P11 := i19.val*i5.val) (P12 := i19.val*i10.val) (P13 := i19.val*i15.val)
+    (P20 := i38.val*i2.val) (P21 := i38.val*i5.val) (P22 := i38.val*i10.val) (P23 := i38.val*i15.val)
+    (P30 := i57.val*i2.val) (P31 := i57.val*i5.val) (P32 := i57.val*i10.val) (P33 := i57.val*i15.val)
+    (c0 := i8.val) (c1 := i13.val) (c2 := i18.val) (c3 := r4.val) (c4 := i27.val) (c5 := i32.val)
+    (c6 := i37.val) (c7 := r5.val) (c8 := i46.val) (c9 := i51.val) (c10 := i56.val) (c11 := r6.val)
+    (c12 := i65.val) (c13 := i70.val) (c14 := i75.val) (c15 := r7.val)
+    (mA1 := R1.val) (mA2 := R2.val) (mA3 := R3.val)
+    (mB1 := R21.val) (mB2 := R31.val) (mB3 := R41.val)
+    (mC2 := R32.val) (mC3 := R42.val) (mC4 := R51.val)
+    (L0 := M0.val) (L1 := M1.val) (L2 := M2.val) (L3 := M3.val)
+    (L4 := M4.val) (L5 := M5.val) (L6 := M6.val) (L7 := r7.val)
+    (by omega) (by omega) (by omega) (by omega) (by omega) (by omega) (by omega) (by omega)
+    (by omega) (by omega) (by omega) (by omega) (by omega) (by omega) (by omega) (by omega)
+    (by omega)
+  -- The top limb is `r7.val` directly (no mask); omega needs it numerically `< 2⁶⁴`.
+  have hr7' : (r7 : Std.U128).val < 2 ^ 64 := by scalar_tac
+  -- Goal is now the small Horner form `Σ Mₖ.val % 2⁶⁴ · 2⁶⁴ᵏ = a·b`; `h` gives the same sum
+  -- without the masks (each `Mₖ.val < 2⁶⁴` via `hM*v`), so omega bridges it directly.  Clear the
+  -- `% 2¹²⁸`-laden carry / R-value / bound hypotheses first so omega's model stays small.
+  clear i8_post1 i13_post1 i18_post1 r4_post1 i27_post1 i32_post1 i37_post1 r5_post1
+    i46_post1 i51_post1 i56_post1 r6_post1 i65_post1 i70_post1 i75_post1 r7_post1
+    hR1v hR2v hR3v hR21v hR31v hR41v hR32v hR42v hR51v
+    b00 b01 b02 b03 b10 b11 b12 b13 b20 b21 b22 b23 b30 b31 b32 b33
+  -- Each masked output limb is `< 2^64`, so the `& mask` (`% 2^64`) on the seven low
+  -- limbs and the bound `hr7'` on the unmasked top limb make every `% 2^64` the identity.
+  -- Removing the masks is ESSENTIAL: `omega` over the `% 2^64`-laden Horner form does not
+  -- terminate (the eight residues × `2^448`-scale coefficients explode its search).  With
+  -- the masks gone the goal is `comba_recombine`'s identity `h` up to Horner/expanded
+  -- regrouping, which `linarith` discharges.
+  have b0 : M0.val < 2 ^ 64 := by rw [hM0v]; exact Nat.mod_lt _ (by norm_num)
+  have b1 : M1.val < 2 ^ 64 := by rw [hM1v]; exact Nat.mod_lt _ (by norm_num)
+  have b2 : M2.val < 2 ^ 64 := by rw [hM2v]; exact Nat.mod_lt _ (by norm_num)
+  have b3 : M3.val < 2 ^ 64 := by rw [hM3v]; exact Nat.mod_lt _ (by norm_num)
+  have b4 : M4.val < 2 ^ 64 := by rw [hM4v]; exact Nat.mod_lt _ (by norm_num)
+  have b5 : M5.val < 2 ^ 64 := by rw [hM5v]; exact Nat.mod_lt _ (by norm_num)
+  have b6 : M6.val < 2 ^ 64 := by rw [hM6v]; exact Nat.mod_lt _ (by norm_num)
+  rw [Nat.mod_eq_of_lt b0, Nat.mod_eq_of_lt b1, Nat.mod_eq_of_lt b2, Nat.mod_eq_of_lt b3,
+    Nat.mod_eq_of_lt b4, Nat.mod_eq_of_lt b5, Nat.mod_eq_of_lt b6, Nat.mod_eq_of_lt hr7']
+  linarith [h]
 
 end minroot_core.field.spec

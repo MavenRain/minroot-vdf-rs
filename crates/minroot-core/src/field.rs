@@ -258,10 +258,8 @@ impl FieldElement {
     /// Propagates [`Error::Truncation`] from wide reduction (unreachable).
     pub fn try_mul(self, rhs: Self) -> Result<Self, Error> {
         debug_assert_eq!(self.curve, rhs.curve);
-        let wide = mul_wide(&self.limbs, &rhs.limbs);
-        let reduced = reduce_wide(&wide, &self.curve.modulus())?;
         Ok(Self {
-            limbs: reduced,
+            limbs: mod_mul(&self.limbs, &rhs.limbs, &self.curve.modulus())?,
             curve: self.curve,
         })
     }
@@ -385,20 +383,91 @@ fn mod_sub(
     Ok(result)
 }
 
+/// Modular multiplication of two reduced 4-limb values: `(a * b) mod modulus`.
+///
+/// Schoolbook wide multiply to 512 bits, then shift-and-subtract reduction
+/// modulo `modulus`.  For `modulus < 2^255` the reduction returns the
+/// canonical residue `< modulus`.
+///
+/// # Errors
+///
+/// Propagates [`Error::Truncation`] from wide multiply or reduction
+/// (unreachable).
+fn mod_mul(
+    a: &[u64; LIMBS],
+    b: &[u64; LIMBS],
+    modulus: &[u64; LIMBS],
+) -> Result<[u64; LIMBS], Error> {
+    let wide = mul_wide(a, b)?;
+    reduce_wide(&wide, modulus)
+}
+
 /// Schoolbook multiplication producing an 8-limb (512-bit) result.
-#[allow(clippy::cast_possible_truncation)]
-fn mul_wide(a: &[u64; LIMBS], b: &[u64; LIMBS]) -> [u64; LIMBS * 2] {
-    let mut result = [0u64; LIMBS * 2];
-    a.iter().enumerate().for_each(|(i, &ai)| {
-        let carry = b.iter().enumerate().fold(0u128, |carry, (j, &bj)| {
-            let prod =
-                u128::from(ai) * u128::from(bj) + u128::from(result[i + j]) + carry;
-            result[i + j] = prod as u64;
-            prod >> 64
-        });
-        result[i + LIMBS] = carry as u64;
-    });
-    result
+///
+/// Operand-scanning (row-wise) schoolbook, fully unrolled across the four
+/// rows `a[i] * b` and four columns.  Each column accumulator `t` is a
+/// `u128` holding one 64×64 partial product plus the running limb and the
+/// incoming carry; since `(2^64-1)^2 + 2·(2^64-1) = 2^128 - 1`, the
+/// accumulator never overflows `u128`, so the `wrapping_*` operations are
+/// exact.  Each result limb is the low 64 bits of its column (`& mask`);
+/// the carry (`>> 64`) feeds the next column.
+///
+/// # Errors
+///
+/// Returns [`Error::Truncation`] if a masked limb fails to fit in `u64`
+/// (unreachable; the mask guarantees the value is in range).
+fn mul_wide(a: &[u64; LIMBS], b: &[u64; LIMBS]) -> Result<[u64; LIMBS * 2], Error> {
+    let mask = u128::from(u64::MAX);
+    // Row 0: a[0] * b.
+    let t = u128::from(a[0]).wrapping_mul(u128::from(b[0]));
+    let r0 = t & mask;
+    let t = u128::from(a[0]).wrapping_mul(u128::from(b[1])).wrapping_add(t >> 64);
+    let r1 = t & mask;
+    let t = u128::from(a[0]).wrapping_mul(u128::from(b[2])).wrapping_add(t >> 64);
+    let r2 = t & mask;
+    let t = u128::from(a[0]).wrapping_mul(u128::from(b[3])).wrapping_add(t >> 64);
+    let r3 = t & mask;
+    let r4 = t >> 64;
+    // Row 1: a[1] * b, accumulated starting at limb 1.
+    let t = u128::from(a[1]).wrapping_mul(u128::from(b[0])).wrapping_add(r1);
+    let r1 = t & mask;
+    let t = u128::from(a[1]).wrapping_mul(u128::from(b[1])).wrapping_add(r2).wrapping_add(t >> 64);
+    let r2 = t & mask;
+    let t = u128::from(a[1]).wrapping_mul(u128::from(b[2])).wrapping_add(r3).wrapping_add(t >> 64);
+    let r3 = t & mask;
+    let t = u128::from(a[1]).wrapping_mul(u128::from(b[3])).wrapping_add(r4).wrapping_add(t >> 64);
+    let r4 = t & mask;
+    let r5 = t >> 64;
+    // Row 2: a[2] * b, accumulated starting at limb 2.
+    let t = u128::from(a[2]).wrapping_mul(u128::from(b[0])).wrapping_add(r2);
+    let r2 = t & mask;
+    let t = u128::from(a[2]).wrapping_mul(u128::from(b[1])).wrapping_add(r3).wrapping_add(t >> 64);
+    let r3 = t & mask;
+    let t = u128::from(a[2]).wrapping_mul(u128::from(b[2])).wrapping_add(r4).wrapping_add(t >> 64);
+    let r4 = t & mask;
+    let t = u128::from(a[2]).wrapping_mul(u128::from(b[3])).wrapping_add(r5).wrapping_add(t >> 64);
+    let r5 = t & mask;
+    let r6 = t >> 64;
+    // Row 3: a[3] * b, accumulated starting at limb 3.
+    let t = u128::from(a[3]).wrapping_mul(u128::from(b[0])).wrapping_add(r3);
+    let r3 = t & mask;
+    let t = u128::from(a[3]).wrapping_mul(u128::from(b[1])).wrapping_add(r4).wrapping_add(t >> 64);
+    let r4 = t & mask;
+    let t = u128::from(a[3]).wrapping_mul(u128::from(b[2])).wrapping_add(r5).wrapping_add(t >> 64);
+    let r5 = t & mask;
+    let t = u128::from(a[3]).wrapping_mul(u128::from(b[3])).wrapping_add(r6).wrapping_add(t >> 64);
+    let r6 = t & mask;
+    let r7 = t >> 64;
+    Ok([
+        u64::try_from(r0).map_err(|_| Error::Truncation)?,
+        u64::try_from(r1).map_err(|_| Error::Truncation)?,
+        u64::try_from(r2).map_err(|_| Error::Truncation)?,
+        u64::try_from(r3).map_err(|_| Error::Truncation)?,
+        u64::try_from(r4).map_err(|_| Error::Truncation)?,
+        u64::try_from(r5).map_err(|_| Error::Truncation)?,
+        u64::try_from(r6).map_err(|_| Error::Truncation)?,
+        u64::try_from(r7).map_err(|_| Error::Truncation)?,
+    ])
 }
 
 /// Reduces a 512-bit product modulo `p` via shift-and-subtract.

@@ -199,7 +199,61 @@ Borrow: `if_pos`, `step` add_limbs, `bv256 r1 = bv256 a + bv256 modulus - bv256 
 r_post2]; ring`), then `BitVec.toNat_add`/`toNat_sub_of_le` to get `val4 r1 = a+modulus-b`
 (finish the `val4`↔`.toNat` defeq gaps with `simp only [val4] at *; omega`).
 
-NEXT: `mul_wide` (rewrite 4×4 schoolbook iterator-free first; `bv_decide` won't scale to a
-512-bit multiply → needs Nat schoolbook decomposition), then `try_mul`. Reminder: Aeneas drops
-inherent methods, so verify the free-fn `try_mul` core (already a free composition of mul_wide
-+ reduce_wide; may not need a refactor).
+## (5e) `mul_wide` [DONE] — verified exact 512-bit schoolbook product
+
+`mul_wide` rewritten iterator-free (fully-unrolled 4×4 row-wise schoolbook, 16 `wrapping_mul`
+MACs, `wrapping_add`/`& mask`/`>>> 64`, `try_from` per limb) + re-extracted (`--start-from
+crate::field::mul_wide` alongside the others) + `try_mul` call-site gets `?`. Behavior-preserving.
+**GOTCHA: the generated `Funs.lean` hits `maxRecDepth` (default 512) on the deep nesting — aeneas
+has NO `-max-rec-depth` flag, so POST-EXTRACTION add `set_option maxRecDepth 4000` to `Funs.lean`
+(re-add after EVERY re-run of aeneas; it is dropped each time).**
+
+`mul_wide_spec` post `val8 out = val4 a * val4 b`. Axioms = `[propext, Classical.choice,
+Quot.sound]` (only 3 — cleaner than the bv_decide specs' 5, because the final bridge is `linarith`,
+not bv_decide). Skeleton: `unfold; simp only [lift]; step*`; first simp (try_from/branch) needs
+`mask_val_le` + `hr7 : r7.val ≤ U64.max := by scalar_tac` (top carry `r7` is the only UNMASKED
+limb); `refine ⟨_, rfl, ?_⟩`.
+
+KEY LESSONS (the OOM/runaway saga, now resolved):
+- **bv_decide does NOT scale** to the carry-save assembly (only 2×2/256-bit is instant; 4×4/512-bit
+  times out the SAT solver). Stay at the Nat level.
+- **`step*` materializes the `>>> 64` carries but INLINES the `& mask` forward-fed intermediates**,
+  so the assembled goal is astronomically large. FIX: `set` the nine forward masks (`R*`) and seven
+  output masks (`M*`) innermost-first to opaque vars (+ `clear_value`), collapsing the goal to a
+  small Horner form. `comba_recombine` (the pre-existing LINEAR omega lemma) supplies the column
+  identity `h : ↑M0 + ↑M1·2⁶⁴ + … + ↑r7·2⁴⁴⁸ = a·b` (expanded form). 17 column `omega`s feed it.
+- **THE FINAL-STEP FIX (this is what was outstanding):** after the masks are set, the goal is the
+  Horner form `((…·2⁶⁴ + ↑M0%2⁶⁴)…) = product` with a `% 2⁶⁴` on every output limb. A single
+  `omega` here DOES NOT TERMINATE (observed: 96 min single-core, then killed — the eight residues ×
+  `2⁴⁴⁸`-scale coefficients explode omega's search; without `hr7'` it instead fast-failed "could
+  not prove", which is what masked the non-termination). RESOLUTION: each masked limb is `< 2⁶⁴`
+  (`have bk : Mk.val < 2^64 := by rw [hMkv]; exact Nat.mod_lt _ (by norm_num)`), and `hr7'` bounds
+  the unmasked top, so `rw [Nat.mod_eq_of_lt b0, …, Nat.mod_eq_of_lt hr7']` deletes all eight mods;
+  the residue-free goal is then `h` up to Horner↔expanded regrouping, closed by `linarith [h]`.
+  **Use `linarith`, NOT `omega`, for this linear bridge: `linarith` fast-fails, `omega` thrashes.**
+- PROBE TECHNIQUE that cracked it: the file's heavyweight proof makes the LSP `lean_goal` time out,
+  but `lean_multi_attempt {line, snippets:["skip","exact h",…]}` dumps the goal once (the `exact h`
+  type-mismatch printed h vs the expected Horner goal, revealing the exact `% 2⁶⁴` + Horner gap).
+
+## (5f) `mod_mul` [DONE] — verified modular multiply (the headline, behind `try_mul`)
+
+Aeneas drops inherent impl methods, so (as with `mod_add`/`mod_sub`) factor the multiply core into
+a FREE fn `mod_mul(a, b, modulus) = reduce_wide(mul_wide(a,b)?, modulus)` and have `try_mul`
+delegate; verify `mod_mul`. `mod_mul_spec` post `val4 out < val4 modulus ∧ val4 out =
+(val4 a * val4 b) % val4 modulus` (preconds `0 < val4 modulus`, `2·val4 modulus ≤ 2^256`). Axioms =
+standard 5 (the bv_decide pair flows in via `reduce_wide`), no sorryAx.
+
+**COMPUTE-REDUCER PRACTICE: put `mod_mul_spec` in its OWN file `MinrootCore/Properties/ModMul.lean`
+(importing `ReduceWide`), NOT in `ReduceWide.lean`.** Co-locating it with `mul_wide_spec` would make
+every `mod_mul_spec` iteration re-elaborate the ~30-min `mul_wide` proof; the separate file reuses
+the cached `ReduceWide.olean`, so iterating costs seconds. (Re-extracting `Funs.lean` still forces
+ONE `ReduceWide.olean` rebuild, since lake keys on the dependency olean's hash.)
+
+Proof: `unfold mod_mul; step*` runs `mul_wide_spec` (it is `@[step]`), binding the wide product `r`
+with `r_post1 : x✝ = .Ok r` and `r_post2 : val8 r = val4 a * val4 b`, but LEAVES the `?` (branch)
+acting on the raw inner result `x✝` (does NOT substitute). So `rw [r_post1]` then `simp only
+[…CoreOpsTry…branch, bind_tc_ok]` reduces the branch+match to `reduce_wide r modulus`; then
+`apply WP.spec_mono (reduce_wide_spec r modulus hp0 hp)` (mirrors how `reduce_wide_spec` consumes
+`reduce_wide_rec_spec`); `rintro res ⟨out, hres, hlt, heq⟩`; close the residue conjunct with
+`exact ⟨out, hres, hlt, by rw [heq, r_post2]⟩` (`heq : val4 out = val8 r % modulus`, `r_post2`
+rewrites `val8 r` to the product).
