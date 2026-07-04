@@ -185,15 +185,9 @@ impl FieldElement {
     ///
     /// Propagates [`Error::Truncation`] from multiplication (unreachable).
     pub fn pow(self, exp: &[u64; LIMBS], num_bits: usize) -> Result<Self, Error> {
-        (0..num_bits).rev().try_fold(Self::one(self.curve), |acc, i| {
-            let squared = acc.sqr()?;
-            let limb_idx = i / 64;
-            let bit_idx = i % 64;
-            if (exp[limb_idx] >> bit_idx) & 1 == 1 {
-                squared.try_mul(self)
-            } else {
-                Ok(squared)
-            }
+        Ok(Self {
+            limbs: mod_pow(&self.limbs, exp, num_bits, &self.curve.modulus())?,
+            curve: self.curve,
         })
     }
 
@@ -400,6 +394,59 @@ fn mod_mul(
 ) -> Result<[u64; LIMBS], Error> {
     let wide = mul_wide(a, b)?;
     reduce_wide(&wide, modulus)
+}
+
+/// Modular exponentiation by square-and-multiply: `(base ^ exp) mod modulus`.
+///
+/// The exponent is little-endian limbs with `num_bits` significant bits.
+/// Bits are processed from the most significant (`num_bits - 1`) down to
+/// bit 0, squaring the accumulator each step and multiplying `base` back
+/// in whenever the current exponent bit is set.  The accumulator starts at
+/// one (`[1, 0, 0, 0]`).  Every multiply delegates to [`mod_mul`], which
+/// keeps the accumulator the canonical residue `< modulus`.
+///
+/// # Errors
+///
+/// Propagates [`Error::Truncation`] from modular multiplication (unreachable).
+fn mod_pow(
+    base: &[u64; LIMBS],
+    exp: &[u64; LIMBS],
+    num_bits: usize,
+    modulus: &[u64; LIMBS],
+) -> Result<[u64; LIMBS], Error> {
+    mod_pow_rec(base, exp, modulus, num_bits, [1u64, 0, 0, 0])
+}
+
+/// Tail-recursive core of [`mod_pow`].
+///
+/// `remaining` counts the exponent bits still to process; the bit handled
+/// in this step is `remaining - 1`, so the recursion walks bits
+/// `num_bits - 1` → 0 (the high-to-low square-and-multiply order).
+///
+/// # Errors
+///
+/// Propagates [`Error::Truncation`] from modular multiplication (unreachable).
+fn mod_pow_rec(
+    base: &[u64; LIMBS],
+    exp: &[u64; LIMBS],
+    modulus: &[u64; LIMBS],
+    remaining: usize,
+    acc: [u64; LIMBS],
+) -> Result<[u64; LIMBS], Error> {
+    if remaining == 0 {
+        Ok(acc)
+    } else {
+        let bit = remaining - 1;
+        let squared = mod_mul(&acc, &acc, modulus)?;
+        let limb_idx = bit / 64;
+        let bit_idx = bit % 64;
+        let next = if (exp[limb_idx] >> bit_idx) & 1 == 1 {
+            mod_mul(&squared, base, modulus)?
+        } else {
+            squared
+        };
+        mod_pow_rec(base, exp, modulus, bit, next)
+    }
 }
 
 /// Schoolbook multiplication producing an 8-limb (512-bit) result.

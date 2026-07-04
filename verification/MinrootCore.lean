@@ -6,3 +6,4 @@
 import MinrootCore.Code.Funs
 import MinrootCore.Properties.ReduceWide
 import MinrootCore.Properties.ModMul
+import MinrootCore.Properties.Pow
